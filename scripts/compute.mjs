@@ -20,10 +20,13 @@ function emptyDay() {
     orders: { total: 0, ecomm: 0, tiktok: 0, isla: 0, engage: 0, otros: 0 },
     pieces: 0,
     fresh: { n: 0, tot: 0, tax: 0, net: 0, ship: 0, cogs: 0 },
-    // Contribution margin con costos de Triple Whale, todos los canales. missing: órdenes sin costos configurados.
-    tw: { rev: 0, tax: 0, costs: 0, missing: 0 },
+    // Contribution margin con costos reales, todos los canales. missing: órdenes sin costos configurados.
+    cmx: { rev: 0, tax: 0, cogs: 0, gateway: 0, tiktok: 0, cubbo: 0, missing: 0, ch: {} },
   };
 }
+
+const CM_PARTS = ["tax", "cogs", "gateway", "tiktok", "cubbo"];
+const cmCosts = (x) => x.tax + x.cogs + x.gateway + x.tiktok + x.cubbo;
 
 export function aggregateDaily(rows) {
   const days = {};
@@ -36,14 +39,21 @@ export function aggregateDaily(rows) {
     day[key] += amount;
     day.orders.total += count;
     day.orders[key] += count;
-    if (row.tw_costs == null) day.tw.missing += count;
+    if (row.cm_costs == null) day.cmx.missing += count;
     else {
-      day.tw.rev += n(row.order_current_total_price);
-      day.tw.tax += n(row.order_current_total_tax);
-      day.tw.costs += n(row.tw_costs);
+      // Por canal y luego el total: cada pedido suma sus costos solo en su canal.
+      const ch = (day.cmx.ch[key] ??= { rev: 0, tax: 0, cogs: 0, gateway: 0, tiktok: 0, cubbo: 0, n: 0 });
+      ch.rev += n(row.order_current_total_price);
+      ch.n += count;
+      day.cmx.rev += n(row.order_current_total_price);
+      for (const k of CM_PARTS) {
+        day.cmx[k] += n(row.cm_costs[k]);
+        ch[k] += n(row.cm_costs[k]);
+      }
     }
-    if (key === "ecomm") {
-      day.pieces += n(row.order_quantity);
+    if (key === "ecomm") day.pieces += n(row.order_quantity);
+    // Clientes nuevos = Online Store + Cubbo Engage, igual que el reporte diario de Ramón.
+    if (key === "ecomm" || key === "engage") {
       if (n(row.order_customer_number_of_orders) === 1) {
         day.fresh.n += count;
         day.fresh.tot += n(row.order_current_total_price);
@@ -77,15 +87,18 @@ function thresholds(days, plan, today) {
   return { piso, obj: base / target, cacMax: target / f.n, cacBreakeven: contrib / f.n, source: "promo", orders: f.n };
 }
 
-function metrics(day, spend, recipe) {
+// MER usa todo el gasto de Meta Ads; NC-ROAS, margen de nuevos y CAC usan solo el gasto en clientes nuevos
+// (sin las campañas de clientes existentes).
+function metrics(day, spend, spendNew, recipe) {
   const f = day?.fresh;
   if (!f || !spend) return { mer: null, nc: null, margin: null, cac: null };
   const base = f.tot - f.tax;
+  const acq = spendNew || spend;
   return {
     mer: day.ecomm / spend,
-    nc: base / spend,
-    margin: f.net ? (contribution(f, recipe) - spend) / f.net : null,
-    cac: f.n ? spend / f.n : null,
+    nc: base / acq,
+    margin: f.net ? (contribution(f, recipe) - acq) / f.net : null,
+    cac: f.n ? acq / f.n : null,
   };
 }
 
@@ -161,15 +174,39 @@ function topFlows(klaviyo, today, yesterday) {
     .slice(0, 6);
 }
 
-// CM = venta vigente − costos de Triple Whale (COGS, IVA, envío, pasarela, fulfillment) − gasto de Meta Ads.
+// CM = venta vigente − IVA − COGS − pasarela − comisión TikTok − Cubbo − gasto de Meta Ads (todo, nuevos y existentes).
 // Se expresa también como % de la venta sin IVA. null si la marca no tiene costos configurados.
 function contributionMargin(daysList, spendTotal) {
-  if (!daysList.length || daysList.some((d) => d.tw.missing)) return null;
-  const rev = daysList.reduce((s, d) => s + d.tw.rev, 0);
-  const tax = daysList.reduce((s, d) => s + d.tw.tax, 0);
-  const costs = daysList.reduce((s, d) => s + d.tw.costs, 0);
+  if (!daysList.length || daysList.some((d) => d.cmx.missing)) return null;
+  const sum = (k) => daysList.reduce((s, d) => s + d.cmx[k], 0);
+  const rev = sum("rev"), tax = sum("tax");
+  const costs = daysList.reduce((s, d) => s + cmCosts(d.cmx), 0);
   const value = rev - costs - spendTotal;
-  return { value, pct: rev - tax ? value / (rev - tax) : null, beforeAds: rev - costs, spend: spendTotal, base: rev - tax };
+  const channels = {};
+  for (const d of daysList) {
+    for (const [key, c] of Object.entries(d.cmx.ch ?? {})) {
+      const t = (channels[key] ??= { rev: 0, tax: 0, cogs: 0, gateway: 0, tiktok: 0, cubbo: 0, n: 0 });
+      for (const k in t) t[k] += c[k];
+    }
+  }
+  return {
+    value, pct: rev - tax ? value / (rev - tax) : null, beforeAds: rev - costs, spend: spendTotal, base: rev - tax,
+    parts: { cogs: sum("cogs"), gateway: sum("gateway"), tiktok: sum("tiktok"), cubbo: sum("cubbo") },
+    channels,
+  };
+}
+
+// Gasto en clientes nuevos por día: todo menos las campañas de clientes existentes.
+function newSpendByDate(campaigns, pattern) {
+  if (!campaigns?.length) return null;
+  const re = new RegExp(pattern || "existing", "i");
+  const out = {};
+  for (const row of campaigns) {
+    out[row.date] ??= { total: 0, existing: 0 };
+    out[row.date].total += n(row.spend);
+    if (re.test(row.campaign ?? "")) out[row.date].existing += n(row.spend);
+  }
+  return out;
 }
 
 export function compute(raw, plan) {
@@ -178,6 +215,14 @@ export function compute(raw, plan) {
   const planByDay = Object.fromEntries(plan.days.map((d) => [d.d, d]));
   const days = aggregateDaily(raw.daily);
   const spend = Object.fromEntries(raw.meta.map((m) => [m.date, m]));
+  const split = newSpendByDate(raw.metaCampaigns, plan.existingCampaigns);
+  // El detalle por campaña llega más fresco que el total diario de Windsor: si existe, manda.
+  const spendOf = (date) => split?.[date]?.total ?? n(spend[date]?.spend);
+  // Si no llega el detalle por campaña, el gasto de nuevos queda igual al total (como antes).
+  const spendNewOf = (date) => {
+    const s = split?.[date];
+    return s ? Math.max(0, s.total - s.existing) : spendOf(date);
+  };
   const blank = emptyDay();
 
   const todayPlan = planByDay[today] ?? null;
@@ -198,8 +243,8 @@ export function compute(raw, plan) {
       const m = spend[d.d];
       return {
         date: d.d, dow: d.dow, today: d.d === today,
-        spend: n(m?.spend), plan15: d.meta15, plan20: d.meta20, ly: d.lyMeta,
-        ...metrics(days[d.d], n(m?.spend), plan.recipe),
+        spend: spendOf(d.d), spendNew: spendNewOf(d.d), plan15: d.meta15, plan20: d.meta20, ly: d.lyMeta,
+        ...metrics(days[d.d], spendOf(d.d), spendNewOf(d.d), plan.recipe),
       };
     });
   const decision = decide(history, limits.obj);
@@ -207,8 +252,8 @@ export function compute(raw, plan) {
   const hasCosts = Boolean(plan.costs);
   const promoDays = Object.entries(days).filter(([date]) => date >= plan.promoStart && date <= today).map(([, day]) => day);
   const cm = hasCosts ? {
-    today: contributionMargin([todayDay], n(spend[today]?.spend)),
-    yesterday: contributionMargin([yDay], n(spend[yesterday]?.spend)),
+    today: contributionMargin([todayDay], spendOf(today)),
+    yesterday: contributionMargin([yDay], spendOf(yesterday)),
     promo: contributionMargin(promoDays, history.reduce((sum, h) => sum + h.spend, 0)),
   } : null;
 
@@ -318,6 +363,20 @@ export function compute(raw, plan) {
     goal: plan.goal,
     cm,
     channelList: plan.channels,
+    hasTikTok: plan.channels.some((c) => c.key === "tiktok"),
+    recipe: plan.recipe,
+    // Serie día por día de noviembre para la vista por fechas (la página suma el rango que se elija).
+    series: Array.from({ length: Number(today.slice(8)) }, (_, i) => `2026-11-${String(i + 1).padStart(2, "0")}`).map((date) => {
+      const day = days[date] ?? emptyDay();
+      const goal = planByDay[date] ?? null;
+      return {
+        date, today: date === today,
+        goal: goal?.total ?? null, goals: goal ? Object.fromEntries(plan.channels.map((c) => [c.key, goal[c.key] ?? 0])) : null,
+        total: day.total, ch: { ecomm: day.ecomm, tiktok: day.tiktok, isla: day.isla, engage: day.engage, otros: day.otros },
+        orders: day.orders, pieces: day.pieces, fresh: day.fresh,
+        cm: day.cmx, spend: spendOf(date), spendNew: spendNewOf(date),
+      };
+    }),
     alerts,
     limits,
     decision,
@@ -338,9 +397,9 @@ export function compute(raw, plan) {
     meta: {
       history,
       today: {
-        spend: n(todayMeta?.spend), plan15: todayPlan?.meta15 ?? 0, plan20: todayPlan?.meta20 ?? 0,
+        spend: spendOf(today), spendNew: spendNewOf(today), plan15: todayPlan?.meta15 ?? 0, plan20: todayPlan?.meta20 ?? 0,
         cpm: n(todayMeta?.cpm), frequency: n(todayMeta?.frequency),
-        ...metrics(todayDay, n(todayMeta?.spend), plan.recipe),
+        ...metrics(todayDay, spendOf(today), spendNewOf(today), plan.recipe),
       },
       cumulative: { spend: promoSpend, plan15: planTotal15, cap: plan.capMeta },
       oct: plan.oct,
@@ -350,7 +409,7 @@ export function compute(raw, plan) {
     hours: { goal: curve.map((c) => (todayPlan?.total ?? 0) * c), real: realHours, ly: lyHours, nowHour: now.hour },
     channels: plan.channels.map((c) => channel(c.key, c.label)),
     customers: {
-      fresh: todayDay.fresh.tot, returning: todayDay.ecomm - todayDay.fresh.tot,
+      fresh: todayDay.fresh.tot, returning: todayDay.ecomm + todayDay.engage - todayDay.fresh.tot,
       ordersOnline: todayDay.orders.ecomm,
     },
     ticket: {
@@ -379,7 +438,7 @@ export function compute(raw, plan) {
       aov: yDay.orders.ecomm ? yDay.ecomm / yDay.orders.ecomm : null,
       pieces: yDay.orders.ecomm ? yDay.pieces / yDay.orders.ecomm : null,
       kit: kitShare(onlineYesterday),
-      freshShare: yDay.ecomm ? yDay.fresh.tot / yDay.ecomm : null,
+      freshShare: yDay.ecomm + yDay.engage ? yDay.fresh.tot / (yDay.ecomm + yDay.engage) : null,
       paceYear: paceLabelFor(yDay.total, yPlan.lyTotal),
       mtdExpected: before + plan.days.filter((d) => d.d <= yesterday).reduce((s, d) => s + d.total, 0),
       mtd: mtd - todayDay.total,
@@ -413,7 +472,7 @@ export function general(outputs, generatedAt) {
     spend: { today: sum((b) => b.meta.today.spend), yesterday: sum((b) => b.close?.meta?.spend) },
     cm: { today: cmSum("today"), yesterday: cmSum("yesterday"), promo: cmSum("promo") },
     brands: list.map((b) => ({
-      id: b.id, name: b.name, goal: b.goal,
+      id: b.id, name: b.name, goal: b.goal, hasTikTok: b.hasTikTok,
       day: { real: b.day.real, goal: b.day.plan?.total ?? 0, expected: b.day.expected, projection: b.day.projection, pace: b.day.pace },
       month: { mtd: b.month.mtd, expected: b.month.expected, projection: b.month.projection },
       yesterday: { real: b.close?.day.total ?? 0, goal: b.close?.plan.total ?? 0 },

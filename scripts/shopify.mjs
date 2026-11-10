@@ -79,13 +79,27 @@ async function allOrders(shop, token, from, customerHistory) {
   return orders;
 }
 
-// Costos como los configura Triple Whale: pasarela por nombre, fulfillment % de la venta, envío = lo cobrado.
-function tripleWhaleCosts(order, row, costs) {
+// Costos reales por pedido, según el canal:
+// - Ecomm (y Cubbo Engage): pasarela + Cubbo completo (guía, caja, frágil, retornos, picking por pieza).
+// - TikTok: comisión de TikTok sobre la venta + Cubbo sin guía (TikTok la paga; solo la guía externa). Sin pasarela.
+//   TikTok llega a Shopify sin IVA desglosado; el precio ya lo trae, así que se saca el 16% incluido.
+// - Tienda física: pasarela si se pagó con terminal (efectivo no); sin envío ni Cubbo.
+// Cada costo se calcula una sola vez por pedido, según su canal.
+function realCosts(order, row, costs) {
   if (!costs) return null;
-  const gateways = (order.paymentGatewayNames ?? []).join(" ");
-  const rule = costs.gateways.find((g) => new RegExp(g.match, "i").test(gateways));
-  const gateway = (rule ? rule.pct * row.total : 0) + costs.fee;
-  return row.cogs + row.tax + row.shipping + gateway + costs.fulfillment * row.total;
+  const c = costs.cubbo;
+  const gateways = (order.paymentGatewayNames ?? []).filter((g) => !/^cash$/i.test(g));
+  const isTikTok = row.channel === "TikTok";
+  const isStore = row.channel === "Point of Sale";
+  const handling = c.caja + c.fragil + c.retornos + c.pieza * row.quantity;
+  const iva = costs.iva ?? 0.16;
+  return {
+    cogs: row.cogs,
+    tax: isTikTok && !row.tax ? row.currentTotal - row.currentTotal / (1 + iva) : row.tax,
+    gateway: !isTikTok && gateways.length ? costs.gateway * row.currentTotal : 0,
+    tiktok: isTikTok ? costs.tiktokCommission * row.currentTotal : 0,
+    cubbo: isStore ? 0 : isTikTok ? c.guiaExterna + handling : c.guia + handling,
+  };
 }
 
 function customerIndex(order) {
@@ -141,7 +155,7 @@ export async function loadShopify(plan, generatedAt, { clientId, clientSecret })
       order_current_shipping_price: row.shipping,
       order_cost_of_goods_sold: row.cogs,
       order_quantity: row.quantity,
-      tw_costs: tripleWhaleCosts(order, row, plan.costs),
+      cm_costs: realCosts(order, row, plan.costs),
     });
     if (row.date >= yesterday) {
       recent.push({ order_id: order.name, order_created_at: row.stamp, order_sales_channel: row.channel, order_quantity: row.quantity, order_total_price_amount: row.total });

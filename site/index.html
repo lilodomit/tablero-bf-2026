@@ -36,6 +36,7 @@ nav button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color
 .dark{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .dark .lab,.dark .note{color:var(--soft)}
 .lab{font-size:13px;font-weight:600;color:var(--muted)}
+.big .amt{font-size:.55em;font-weight:700;margin-left:10px;color:var(--muted);letter-spacing:0;white-space:nowrap}
 .big{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
 .note{font-size:14px;color:var(--muted)}
 .small{font-size:12px;color:var(--muted)}
@@ -101,6 +102,9 @@ td{padding:8px 8px 8px 0;border-top:1px solid var(--track);font-variant-numeric:
 #gate input{font:inherit;min-height:44px;padding:0 12px;border:1px solid #DCD6CC;border-radius:10px}
 #gate button{font:inherit;font-weight:700;min-height:44px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);cursor:pointer}
 #err{font-size:13px;color:var(--bad);min-height:18px}
+.chip{font:inherit;font-size:13px;font-weight:600;min-height:36px;padding:0 14px;border-radius:999px;border:1px solid #DCD6CC;background:var(--card);color:var(--ink);cursor:pointer}
+.chip[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+input[type=date]{font:inherit;font-size:14px;min-height:36px;padding:0 8px;border:1px solid #DCD6CC;border-radius:8px;margin-left:4px}
 .t-good{color:var(--good)}.t-warn{color:#B26A00}.t-bad{color:var(--bad)}
 .decision .t-good{color:#9FD8B5}.decision .t-warn{color:#F2C27A}.decision .t-bad{color:#F4A39B}
 .split{line-height:1.5}.dark .split{color:var(--soft)}.split strong{color:inherit;font-weight:700}
@@ -140,10 +144,13 @@ const ncClass=(nc,l)=>nc==null||!l?"":nc>=l.obj?"t-good":nc>=l.piso?"t-warn":"t-
 const merPct=(mer)=>mer?1/mer:null;
 const dayBar=(real,goal,expected,pace)=>goal?`<div class="bar t"><i style="width:${clamp(real/goal*100)}%;background:${toneOf(pace)}"></i><u style="left:${clamp(expected/goal*100)}%;background:var(--ink)"></u></div><div class="small">${P(real/goal)} del objetivo del día · línea negra: donde deberíamos ir a esta hora</div>`:"";
 
-// Ruta: #general, #<marca> (en vivo) o #<marca>-cierre. #cierre y #vivo vienen del tablero de una sola marca (Twins).
-const route=()=>{const h=location.hash.slice(1);if(h==="cierre")return{brand:"twins",view:"cierre"};if(!h||h==="vivo"||h==="general")return{brand:h==="vivo"?"twins":"general",view:"vivo"};const[b,v]=h.split("-");return{brand:b,view:v==="cierre"?"cierre":"vivo"}};
+// Ruta: #general, #<marca> (en vivo), #<marca>-cierre o #<marca>-fechas. #cierre y #vivo vienen del tablero de una sola marca (Twins).
+const route=()=>{const h=location.hash.slice(1);if(h==="cierre")return{brand:"twins",view:"cierre"};if(!h||h==="vivo")return{brand:h==="vivo"?"twins":"general",view:"vivo"};const[b,v]=h.split("-");return{brand:b,view:v==="cierre"||v==="fechas"?v:"vivo"}};
 let data=null,{brand,view}=route(),key=null,lastText="";
-const go=(b,v)=>{brand=b;view=v;history.replaceState(null,"",b==="general"?"#general":v==="cierre"?`#${b}-cierre`:`#${b}`);render()};
+// Rango de la vista por fechas: por defecto, desde que arrancó la promo hasta hoy.
+let rangeFrom=null,rangeTo=null;
+const go=(b,v)=>{brand=b;view=b==="general"&&v==="cierre"?"vivo":v;history.replaceState(null,"",view==="vivo"?`#${b}`:`#${b}-${view}`);render()};
+const costNote=(hasTikTok)=>`Costos reales: COGS, IVA, pasarela 3% y Cubbo${hasTikTok?", más comisión de TikTok 14% · todavía sin el gasto de GMV Max":""}`;
 
 function brandNav(){
   const tabs=[["general","General"],...data.order.map(id=>[id,data.brands[id].name])];
@@ -154,14 +161,16 @@ function head(d){
   const title=view==="vivo"?`${dayLabel(d.today)} · ${d.phase?d.phase.name:"Noviembre"}`:(d.close?`Cierre del ${dayLabel(d.close.date)}`:"Cierre de ayer");
   const age=Math.round((Date.now()-Date.parse(d.generatedAt))/60000);
   const stale=age>20||d.stale?`<span class="stale"> · Sin actualizar hace ${age} min</span>`:"";
-  return `${brandNav()}<header><div><div class="kicker">${esc(d.name)} · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta Ads sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button></nav></header>`;
+  return `${brandNav()}<header><div><div class="kicker">${esc(d.name)} · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta Ads sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button><button data-v="fechas" aria-pressed="${view==="fechas"}">Por fechas</button></nav></header>`;
 }
 
-// Tarjeta de contribution margin: costos de Triple Whale, todos los canales, después de Meta Ads.
-function cmCard(cm,label){
-  if(!cm)return `<div class="card pace"><div class="lab">Contribution margin</div><div class="big">—</div><div class="note">Faltan los costos de Triple Whale de esta marca</div></div>`;
+// Margen grande: % y, al lado, el monto en pesos.
+const cmBig=(pct,value)=>`${P(pct,1)}${value!=null?`<span class="amt">${M(value)}</span>`:""}`;
+// Tarjeta de contribution margin: costos reales, todos los canales, después de Meta Ads (todo el gasto).
+function cmCard(cm,label,hasTikTok){
+  if(!cm)return `<div class="card pace"><div class="lab">Contribution margin</div><div class="big">—</div><div class="note">Faltan los costos de esta marca</div></div>`;
   const t=cm.today??cm,y=cm.yesterday,p=cm.promo;
-  return `<div class="card pace"><div class="lab">Contribution margin ${label}</div><div class="big">${P(t?.pct,1)}</div><div class="note">${M(t?.value)} · % de la venta sin IVA, después de Meta Ads</div>${y?`<div class="note">Ayer ${P(y.pct,1)} · ${M(y.value)}</div>`:""}${p?`<div class="note">Acumulado promo ${P(p.pct,1)} · ${M(p.value)}</div>`:""}<div class="small">Costos de Triple Whale: COGS, IVA, envío, pasarela y fulfillment${t?.partial?" · sin la marca que no tiene costos":""}</div></div>`;
+  return `<div class="card pace"><div class="lab">Contribution margin ${label}</div><div class="big">${cmBig(t?.pct,t?.value)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div>${y?`<div class="note">Ayer ${P(y.pct,1)} · ${M(y.value)}</div>`:""}${p?`<div class="note">Acumulado promo ${P(p.pct,1)} · ${M(p.value)}</div>`:""}<div class="small">${costNote(hasTikTok)}${t?.partial?" · sin la marca que no tiene costos":""}</div></div>`;
 }
 
 function live(d){
@@ -197,13 +206,14 @@ function live(d){
 <div class="card pace"><div class="lab">Hoy vs objetivo del día</div><div class="big">${M(day.real)}</div><div class="note">Objetivo del día ${M(day.plan?.total)} · a esta hora ${M(day.expected)}</div><div class="note">Cierre proyectado <strong>${day.projection==null?"—":M(day.projection)}</strong> · ${day.projection!=null&&day.plan?.total?P(day.projection/day.plan.total)+" del objetivo":"se calcula después de las primeras horas"}</div>${dayBar(day.real,day.plan?.total,day.expected,day.pace)}<div class="row"><span class="pill ${paceClass(day.pace)}">${P(day.pace)} del pacing</span>${lyCmp}</div></div>
 <div class="card pace"><div class="lab">${d.phase?`Fase ${d.phase.name} (${d.phase.label} nov)`:"Fase"}</div><div class="big">${M(d.phase?.real)}</div><div class="note">de ${M(d.phase?.total)} · Ecomm ${M(d.phase?.ecommReal)} de ${M(d.phase?.ecomm)}</div><div class="bar"><i style="width:${clamp(d.phase?d.phase.real/d.phase.total*100:0)}%"></i></div></div>
 <div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(m.projection)}</div><div class="note">Al ritmo actual · ${P(m.ratio)} del plan</div><div class="scen" aria-label="Escenarios">${scen.map(s=>`<div class="${s===pick?"on":""}">${s}M</div>`).join("")}</div></div>
-${cmCard(d.cm,"hoy")}
+${cmCard(d.cm,"hoy",d.hasTikTok)}
 </section>
+${cmTable(d.cm?.today?.channels,d.cm?.today?.spend??0,d.hasTikTok,"Margen por canal · hoy")}
 <section class="card" aria-label="Meta Ads" style="gap:20px">
 <div class="spread"><h2>Meta Ads · ¿subo, mantengo o bajo?</h2><div class="action ${actionClass}"><strong>Acción: ${d.decision.action}</strong><span>${esc(d.decision.reason)}</span></div></div>
 <div class="kpis">
-${kpi("Gasto hoy",M(metaToday.spend),`Plan ${M(metaToday.plan15)} · para escalar ${M(metaToday.plan20)}`)}
-${kpi("NC-ROAS hoy",X(metaToday.nc),`Objetivo 20%: ${X(limits.obj)} · piso ${X(limits.piso)}`,ncClass(metaToday.nc,limits))}
+${kpi("Gasto hoy",M(metaToday.spend),`En clientes nuevos ${M(metaToday.spendNew)} · plan ${M(metaToday.plan15)} · para escalar ${M(metaToday.plan20)}`)}
+${kpi("NC-ROAS hoy",X(metaToday.nc),`Venta sin IVA de nuevos ÷ gasto en nuevos · objetivo ${X(limits.obj)} · piso ${X(limits.piso)}`,ncClass(metaToday.nc,limits))}
 ${kpi("Margen clientes nuevos",P(metaToday.margin,1),"Después de Meta · objetivo 20%")}
 ${kpi("MER web hoy",P(merPct(metaToday.mer),1),"Gasto Meta Ads ÷ venta ecomm · para escalar: 20% o menos")}
 ${kpi("CAC cliente nuevo",M(metaToday.cac),`Máximo al 20%: ${M(limits.cacMax)}`)}
@@ -251,7 +261,7 @@ ${top("Venta de ayer",M(c.day.total),`Objetivo del día ${M(pl.total)} · 2025: 
 ${top("Noviembre acumulado",M(c.mtd),`Deberíamos ir en ${M(c.mtdExpected)} de ${M(d.goal)}`,`${P(pct(c.mtd,c.mtdExpected))} del pacing`,paceClass(pct(c.mtd,c.mtdExpected)))}
 ${top("Gasto Meta Ads ayer",M(m?.spend),`Plan ${M(m?.plan15)} · 2025: ${M(m?.ly)}`,`${P(m?pct(m.spend,m.plan15):null)} del plan`,"neutral")}
 ${top("Proyección de mes",M(d.month.projection),`Objetivo ${M(d.goal)}`,`${d.month.projection>=d.goal?"+":"−"}${M(Math.abs(d.month.projection-d.goal))} vs objetivo`,d.month.projection>=d.goal?"good":"warn")}
-${d.cm?top("Contribution margin ayer",P(d.cm.yesterday?.pct,1),`${M(d.cm.yesterday?.value)} · % de la venta sin IVA, después de Meta Ads`,`Acumulado promo ${P(d.cm.promo?.pct,1)} · ${M(d.cm.promo?.value)}`,"neutral"):""}
+${d.cm?top("Contribution margin ayer",cmBig(d.cm.yesterday?.pct,d.cm.yesterday?.value),`% de la venta sin IVA, después de Meta Ads`,`Acumulado promo ${P(d.cm.promo?.pct,1)} · ${M(d.cm.promo?.value)}`,"neutral"):""}
 </section>
 <section class="card"><h2>Venta de ayer por canal</h2><div class="scroll"><table style="min-width:560px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">% de la venta</th></tr></thead><tbody>${chan}</tbody></table></div></section>
 <section class="card"><div class="spread"><h2>Meta Ads día por día · gasto, NC-ROAS y margen</h2><div class="small">Objetivo 20%: ${X(d.limits.obj)} · gasto acumulado ${M(d.meta.cumulative.spend)} de ${M(d.meta.cumulative.plan15)}</div></div><div class="scroll"><table style="min-width:820px;font-size:14px"><thead><tr><th>Día</th><th class="r">Plan</th><th class="r">Para escalar</th><th class="r">Gasto real</th><th class="r">2025</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Margen</th><th style="padding-left:16px">Regla</th></tr></thead><tbody>${metaRows}</tbody></table></div></section>
@@ -276,17 +286,113 @@ function generalView(g){
   const channelCards=g.brands.map(b=>{
     const y=Object.fromEntries((b.channelsYesterday||[]).map(c=>[c.label,c.value]));
     const rows=b.channels.map(c=>`<tr><td>${esc(c.label)}</td><td class="r">${M(c.value)}</td><td class="r">${c.goal?M(c.goal):"—"}</td><td class="r">${c.goal?`<span class="pill ${paceClass(c.value/c.goal/(g.day.goal&&g.day.expected?g.day.expected/g.day.goal:1))}">${P(c.value/c.goal)}</span>`:"—"}</td><td class="r">${M(y[c.label])}</td></tr>`).join("");
-    return `<div class="card"><div class="spread"><h2>${esc(b.name)}</h2><button class="link" data-b="${b.id}">Ver marca</button></div><div class="scroll"><table><thead><tr><th>Canal</th><th class="r">Hoy</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">Ayer</th></tr></thead><tbody>${rows}</tbody></table></div><div class="row"><span class="small">${b.cm?`Contribution margin hoy ${M(b.cm.today?.value)} (${P(b.cm.today?.pct,1)}) · ayer ${M(b.cm.yesterday?.value)} (${P(b.cm.yesterday?.pct,1)})`:"Contribution margin: faltan los costos de Triple Whale de esta marca"}</span></div></div>`;
+    return `<div class="card"><div class="spread"><h2>${esc(b.name)}</h2><button class="link" data-b="${b.id}">Ver marca</button></div><div class="scroll"><table><thead><tr><th>Canal</th><th class="r">Hoy</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">Ayer</th></tr></thead><tbody>${rows}</tbody></table></div><div class="row"><span class="small">${b.cm?`Contribution margin hoy ${M(b.cm.today?.value)} (${P(b.cm.today?.pct,1)}) · ayer ${M(b.cm.yesterday?.value)} (${P(b.cm.yesterday?.pct,1)})`:"Contribution margin: faltan los costos de esta marca"}</span></div></div>`;
   }).join("");
-  return `${brandNav()}<header><div><div class="kicker">IncuBrands · Buen Fin 2026</div><h1>${dayLabel(g.today)} · General</h1><div class="sub">Actualizado ${clock(g.generatedAt)} · Montos con IVA${warn}</div></div></header>
+  return `${brandNav()}<header><div><div class="kicker">IncuBrands · Buen Fin 2026</div><h1>${dayLabel(g.today)} · General</h1><div class="sub">Actualizado ${clock(g.generatedAt)} · Montos con IVA${warn}</div></div>${generalNav()}</header>
 <section class="grid4" aria-label="Pacing general">
 <div class="card pace dark"><div class="lab">Noviembre vs objetivo total</div><div class="big">${M(g.month.mtd)}</div><div class="note">de ${M(g.goal)} · faltan ${M(g.goal-g.month.mtd)}</div><div class="bar"><i style="width:${clamp(g.month.mtd/g.goal*100)}%"></i><u style="left:${clamp(g.month.expected/g.goal*100)}%"></u></div><div class="note" style="font-size:13px">Deberíamos ir en ${M(g.month.expected)} (línea naranja) · <strong style="color:#F2C27A">${P(monthPace)} del pacing</strong></div>${split(b=>`${M(b.month.mtd)} de ${M(b.goal)}`)}</div>
 <div class="card pace"><div class="lab">Hoy vs objetivo del día</div><div class="big">${M(g.day.real)}</div><div class="note">Objetivo del día ${M(g.day.goal)} · a esta hora ${M(g.day.expected)}</div><div class="note">Cierre proyectado <strong>${M(g.day.projection)}</strong>${g.day.projection!=null&&g.day.goal?" · "+P(g.day.projection/g.day.goal)+" del objetivo":""}</div>${dayBar(g.day.real,g.day.goal,g.day.expected,dayPace)}<div class="row"><span class="pill ${paceClass(dayPace)}">${P(dayPace)} del pacing</span></div>${split(b=>`${M(b.day.real)} de ${M(b.day.goal)}`)}</div>
 <div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(g.month.projection)}</div><div class="note">Objetivo ${M(g.goal)} · ${g.month.projection>=g.goal?"+":"−"}${M(Math.abs(g.month.projection-g.goal))}</div><div class="note">Ayer cerró en ${M(g.yesterday.real)} de ${M(g.yesterday.goal)}</div>${split(b=>M(b.month.projection))}</div>
-<div class="card pace"><div class="lab">Contribution margin hoy · todas las marcas</div><div class="big">${P(g.cm.today?.pct,1)}</div><div class="note">${M(g.cm.today?.value)} · % de la venta sin IVA, después de Meta Ads</div>${cmSplit("today")}<div class="note">Ayer ${P(g.cm.yesterday?.pct,1)} · ${M(g.cm.yesterday?.value)}</div>${cmSplit("yesterday")}<div class="note">Acumulado promo ${P(g.cm.promo?.pct,1)} · ${M(g.cm.promo?.value)}</div>${cmSplit("promo")}<div class="small">Costos de Triple Whale: COGS, IVA, envío, pasarela y fulfillment</div></div>
+<div class="card pace"><div class="lab">Contribution margin hoy · todas las marcas</div><div class="big">${cmBig(g.cm.today?.pct,g.cm.today?.value)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div>${cmSplit("today")}<div class="note">Ayer ${P(g.cm.yesterday?.pct,1)} · ${M(g.cm.yesterday?.value)}</div>${cmSplit("yesterday")}<div class="note">Acumulado promo ${P(g.cm.promo?.pct,1)} · ${M(g.cm.promo?.value)}</div>${cmSplit("promo")}<div class="small">${costNote(g.brands.some(b=>b.hasTikTok))}</div></div>
 </section>
-<section class="card" aria-label="Por marca"><h2>Por marca</h2><div class="scroll"><table style="min-width:980px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Hoy</th><th class="r">Objetivo hoy</th><th class="r">Pacing</th><th class="r">Proyección día</th><th class="r">Noviembre</th><th class="r">Objetivo mes</th><th class="r">Proyección mes</th><th class="r">CM hoy</th><th class="r">CM %</th><th class="r">Meta Ads hoy</th></tr></thead><tbody>${brandRows}${totalRow}</tbody></table></div><div class="small">Contribution margin con los costos de Triple Whale, todos los canales, después de Meta Ads. % sobre la venta sin IVA.${g.brands.some(b=>!b.cm)?` El total no incluye a ${esc(g.brands.filter(b=>!b.cm).map(b=>b.name).join(", "))} hasta tener sus costos.`:""}</div></section>
+<section class="card" aria-label="Por marca"><h2>Por marca</h2><div class="scroll"><table style="min-width:980px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Hoy</th><th class="r">Objetivo hoy</th><th class="r">Pacing</th><th class="r">Proyección día</th><th class="r">Noviembre</th><th class="r">Objetivo mes</th><th class="r">Proyección mes</th><th class="r">CM hoy</th><th class="r">CM %</th><th class="r">Meta Ads hoy</th></tr></thead><tbody>${brandRows}${totalRow}</tbody></table></div><div class="small">Contribution margin con costos reales (COGS, IVA, pasarela 3%, Cubbo y comisión de TikTok), todos los canales, después de todo el gasto de Meta Ads. % sobre la venta sin IVA. Todavía sin el gasto de GMV Max.${g.brands.some(b=>!b.cm)?` El total no incluye a ${esc(g.brands.filter(b=>!b.cm).map(b=>b.name).join(", "))} hasta tener sus costos.`:""}</div></section>
 <section class="grid2" aria-label="Venta por canal">${channelCards}</section>`;
+}
+
+// ---------- Vista por fechas ----------
+function generalNav(){return `<nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">Hoy</button><button data-v="fechas" aria-pressed="${view==="fechas"}">Por fechas</button></nav>`}
+
+const addDays=(iso,n)=>{const d=new Date(iso+"T12:00:00Z");d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)};
+function currentRange(){
+  const today=data.general?.today??data.brands[data.order[0]].today;
+  const from=rangeFrom&&rangeFrom>="2026-11-01"?rangeFrom:"2026-11-08",to=rangeTo&&rangeTo<=today?rangeTo:today;
+  return from<=to?{from,to,today}:{from:to,to:from,today};
+}
+function rangeControls(){
+  const {from,to,today}=currentRange(),y=addDays(today,-1);
+  const presets=[["Ayer",y,y],["Últimos 7 días",addDays(today,-6)<"2026-11-01"?"2026-11-01":addDays(today,-6),today],["Desde el 8 nov","2026-11-08",today],["Noviembre","2026-11-01",today]];
+  return `<section class="card" aria-label="Rango de fechas" style="gap:12px"><div class="row" style="gap:8px">${presets.map(([l,f,t])=>`<button class="chip" data-rf="${f}" data-rt="${t}" aria-pressed="${f===from&&t===to}">${l}</button>`).join("")}</div><div class="row" style="gap:12px"><label class="small">Del <input type="date" id="rf" min="2026-11-01" max="${today}" value="${from}"></label><label class="small">al <input type="date" id="rt" min="2026-11-01" max="${today}" value="${to}"></label>${to===today?`<span class="small">Incluye hoy, en curso</span>`:""}</div></section>`;
+}
+// Margen por canal: cada canal con solo sus costos; Meta Ads (todo el gasto) se resta una vez, al total.
+const CH_LABEL={ecomm:"Ecomm",tiktok:"TikTok",isla:"Tienda",engage:"Cubbo Engage",otros:"Otros"};
+function cmTable(chs,spend,hasTikTok,title){
+  if(!chs)return "";
+  const keys=["ecomm","tiktok","isla","engage","otros"].filter(k=>chs[k]?.n);
+  if(!keys.length)return "";
+  const tot={rev:0,tax:0,cogs:0,gateway:0,tiktok:0,cubbo:0,n:0};
+  const row=(label,c,strong)=>{const base=c.rev-c.tax,before=base-c.cogs-c.gateway-c.tiktok-c.cubbo;return `<tr${strong?' style="font-weight:700"':""}><td>${label}</td><td class="r">${c.n.toLocaleString("en-US")}</td><td class="r">${M(base)}</td><td class="r">${M(c.cogs)}</td><td class="r">${c.gateway?M(c.gateway):"—"}</td>${hasTikTok?`<td class="r">${c.tiktok?M(c.tiktok):"—"}</td>`:""}<td class="r">${c.cubbo?M(c.cubbo):"—"}</td><td class="r">${M(before)}</td><td class="r">${P(base?before/base:null,1)}</td></tr>`};
+  const body=keys.map(k=>{for(const p in tot)tot[p]+=chs[k][p];return row(CH_LABEL[k],chs[k])}).join("");
+  const base=tot.rev-tot.tax,before=base-tot.cogs-tot.gateway-tot.tiktok-tot.cubbo,cm=before-spend,cols=hasTikTok?9:8;
+  return `<section class="card"><h2>${title}</h2><div class="scroll"><table style="min-width:${hasTikTok?820:740}px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Pedidos</th><th class="r">Venta sin IVA</th><th class="r">COGS</th><th class="r">Pasarela 3%</th>${hasTikTok?'<th class="r">Comisión TikTok</th>':""}<th class="r">Cubbo</th><th class="r">Margen antes de Meta</th><th class="r">%</th></tr></thead><tbody>${body}${row("Total canales",tot,true)}<tr><td colspan="${cols-2}">− Meta Ads (todo el gasto, nuevos y existentes)</td><td class="r">−${M(spend)}</td><td></td></tr><tr style="font-weight:800"><td colspan="${cols-2}">Contribution margin</td><td class="r">${M(cm)}</td><td class="r">${P(base?cm/base:null,1)}</td></tr></tbody></table></div><div class="small">Pasarela solo en ecomm, Cubbo Engage y tienda con terminal (efectivo no). Comisión de TikTok solo en TikTok. Cubbo: ecomm completo; TikTok sin guía (solo guía externa); tienda sin Cubbo.${hasTikTok?" TikTok: se le saca el IVA incluido en el precio. Todavía sin GMV Max.":""}</div></section>`;
+}
+
+// Suma la serie diaria de una marca en el rango. Hoy cuenta su objetivo solo hasta la hora actual.
+function aggregate(d,from,to){
+  const rows=(d.series||[]).filter(r=>r.date>=from&&r.date<=to);
+  // totalG / chG: venta solo de los días que tienen objetivo, para que el % compare lo mismo.
+  const s={days:rows.length,total:0,totalG:0,goal:0,goalDays:0,ch:{},chG:{},chGoal:{},ordersEcomm:0,pieces:0,fresh:{n:0,tot:0,tax:0,net:0,ship:0,cogs:0},cm:{rev:0,tax:0,cogs:0,gateway:0,tiktok:0,cubbo:0,missing:0,ch:{}},spend:0,spendNew:0,rows};
+  for(const r of rows){
+    s.total+=r.total;
+    if(r.goal!=null){const share=r.today?d.frac:1;s.goal+=r.goal*share;s.goalDays++;s.totalG+=r.total;for(const k in r.goals)s.chGoal[k]=(s.chGoal[k]||0)+r.goals[k]*share;for(const k in r.ch)s.chG[k]=(s.chG[k]||0)+r.ch[k]}
+    for(const k in r.ch)s.ch[k]=(s.ch[k]||0)+r.ch[k];
+    s.ordersEcomm+=r.orders.ecomm;s.pieces+=r.pieces;
+    for(const k in s.fresh)s.fresh[k]+=r.fresh[k];
+    for(const k in s.cm)if(k!=="ch")s.cm[k]+=r.cm[k]||0;
+    for(const [k,c] of Object.entries(r.cm.ch||{})){const t=(s.cm.ch[k]??={rev:0,tax:0,cogs:0,gateway:0,tiktok:0,cubbo:0,n:0});for(const p in t)t[p]+=c[p]||0}
+    s.spend+=r.spend;s.spendNew+=r.spendNew;
+  }
+  const c=s.cm,costs=c.tax+c.cogs+c.gateway+c.tiktok+c.cubbo;
+  s.cmValue=c.missing?null:c.rev-costs-s.spend;s.cmBase=c.rev-c.tax;s.cmPct=s.cmValue!=null&&s.cmBase?s.cmValue/s.cmBase:null;
+  const f=s.fresh,base=f.tot-f.tax,R=d.recipe;
+  s.nc=s.spendNew?base/s.spendNew:null;
+  s.mer=s.ch.ecomm&&s.spend?s.spend/s.ch.ecomm:null;
+  s.aov=s.ordersEcomm?s.ch.ecomm/s.ordersEcomm:null;
+  const online=(s.ch.ecomm||0)+(s.ch.engage||0);
+  s.freshShare=online?f.tot/online:null;
+  s.cac=f.n&&s.spendNew?s.spendNew/f.n:null;
+  s.newMargin=R&&f.net&&s.spendNew?((f.tot-f.tax-f.cogs-R.gateway*f.tot-R.fixed*f.n-R.returns*f.net)-s.spendNew)/f.net:null;
+  s.pace=s.goal?s.totalG/s.goal:null;
+  return s;
+}
+const rangeTitle=(from,to)=>from===to?dayLabel(from):`${dayLabel(from)} al ${dayLabel(to)}`;
+const goalBar=(real,goal)=>goal?`<div class="bar t"><i style="width:${clamp(real/goal*100)}%;background:${toneOf(real/goal)}"></i></div>`:"";
+
+function brandRangeView(d){
+  const {from,to}=currentRange(),s=aggregate(d,from,to),l=d.limits,c=s.cm;
+  const chanRows=[...d.channelList,{key:"engage",label:"Cubbo Engage"}].map(x=>{const v=s.ch[x.key]||0,vg=s.chG[x.key]||0,g=s.chGoal[x.key];return `<tr><td>${esc(x.label)}</td><td class="r">${M(v)}</td><td class="r">${g?M(g):"—"}</td><td class="r">${g?`<span class="pill ${paceClass(vg/g)}">${P(vg/g)}</span>`:"—"}</td><td class="r">${P(s.total?v/s.total:0)}</td></tr>`}).join("");
+  const dayRows=s.rows.slice().reverse().map(r=>{const one=aggregate(d,r.date,r.date);return `<tr><td>${dayLabel(r.date)}${r.today?" (hoy)":""}</td><td class="r">${M(r.total)}</td><td class="r">${one.goal?M(one.goal):"—"}</td><td class="r">${one.goal?`<span class="pill ${paceClass(one.pace)}">${P(one.pace)}</span>`:"—"}</td><td class="r">${P(one.cmPct,1)}</td><td class="r ${ncClass(one.nc,l)}" style="font-weight:700">${X(one.nc)}</td><td class="r">${P(one.mer,1)}</td><td class="r">${M(r.spend)}</td></tr>`}).join("");
+  const partial=s.goalDays<s.days?` · objetivo solo de ${s.goalDays} de ${s.days} días (el plan diario arranca el 8 nov)`:"";
+  return `${brandNav()}<header><div><div class="kicker">${esc(d.name)} · Por fechas</div><h1>${rangeTitle(from,to)}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Montos con IVA</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="false">En vivo</button><button data-v="cierre" aria-pressed="false">Cierre de ayer</button><button data-v="fechas" aria-pressed="true">Por fechas</button></nav></header>
+${rangeControls()}
+<section class="grid4">
+<div class="card pace"><div class="lab">Venta vs objetivo</div><div class="big">${M(s.total)}</div><div class="note">Objetivo ${s.goal?M(s.goal):"—"}${partial}</div>${goalBar(s.totalG,s.goal)}<div class="row"><span class="pill ${paceClass(s.pace)}">${P(s.pace)} del objetivo</span></div></div>
+<div class="card pace"><div class="lab">Contribution margin</div><div class="big">${cmBig(s.cmPct,s.cmValue)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div><div class="small">Venta sin IVA ${M(s.cmBase)} − COGS ${M(c.cogs)} − pasarela ${M(c.gateway)}${d.hasTikTok?` − comisión TikTok ${M(c.tiktok)}`:""} − Cubbo ${M(c.cubbo)} − Meta Ads ${M(s.spend)}</div><div class="small">${costNote(d.hasTikTok)}</div></div>
+<div class="card pace"><div class="lab">NC-ROAS</div><div class="big ${ncClass(s.nc,l)}">${X(s.nc)}</div><div class="note">Objetivo ${X(l.obj)} · piso ${X(l.piso)}</div><div class="small">Venta sin IVA de clientes nuevos (ecomm + Cubbo Engage) ${M(s.fresh.tot-s.fresh.tax)} ÷ gasto en clientes nuevos ${M(s.spendNew)} · CAC ${M(s.cac)} · margen nuevos ${P(s.newMargin,1)}</div></div>
+<div class="card pace"><div class="lab">MER</div><div class="big">${P(s.mer,1)}</div><div class="note">Gasto Meta Ads ${M(s.spend)} ÷ venta ecomm ${M(s.ch.ecomm)}</div><div class="small">De ese gasto, ${M(s.spend-s.spendNew)} fue a clientes existentes</div></div>
+<div class="card pace"><div class="lab">Ecomm</div><div class="big">${(s.ordersEcomm||0).toLocaleString("en-US")}</div><div class="note">órdenes · AOV ${M(s.aov)} · ${s.ordersEcomm?(s.pieces/s.ordersEcomm).toFixed(2):"—"} piezas por orden</div><div class="small">Clientes nuevos: ${P(s.freshShare)} de la venta online (ecomm + Cubbo Engage)</div></div>
+</section>
+${c.missing?"":cmTable(c.ch,s.spend,d.hasTikTok,"Margen por canal")}
+<section class="card"><h2>Venta por canal</h2><div class="scroll"><table style="min-width:520px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th><th class="r">% de la venta</th></tr></thead><tbody>${chanRows}</tbody></table></div></section>
+<section class="card"><h2>Día por día</h2><div class="scroll"><table style="min-width:760px;font-size:14px"><thead><tr><th>Día</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th><th class="r">CM %</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Gasto Meta Ads</th></tr></thead><tbody>${dayRows}</tbody></table></div><div class="small">El objetivo de hoy cuenta solo hasta la hora actual.</div></section>`;
+}
+
+function generalRangeView(){
+  const {from,to}=currentRange();
+  const list=data.order.map(id=>data.brands[id]).filter(b=>!b.error).map(b=>({b,s:aggregate(b,from,to)}));
+  const T=list.reduce((a,{s})=>({total:a.total+s.total,totalG:a.totalG+s.totalG,goal:a.goal+s.goal,cm:a.cm+(s.cmValue??0),base:a.base+(s.cmValue!=null?s.cmBase:0),spend:a.spend+s.spend,spendNew:a.spendNew+s.spendNew,ecomm:a.ecomm+(s.ch.ecomm||0)}),{total:0,totalG:0,goal:0,cm:0,base:0,spend:0,spendNew:0,ecomm:0});
+  const pace=T.goal?T.totalG/T.goal:null,cmPct=T.base?T.cm/T.base:null;
+  const split=(fn)=>`<div class="small split">${list.map(({b,s})=>`${esc(b.name)} <strong>${fn(b,s)}</strong>`).join(" · ")}</div>`;
+  const rows=list.map(({b,s})=>`<tr><td><button class="link" data-b="${b.id}">${esc(b.name)}</button></td><td class="r">${M(s.total)}</td><td class="r">${M(s.goal)}</td><td class="r"><span class="pill ${paceClass(s.pace)}">${P(s.pace)}</span></td><td class="r">${P(s.cmPct,1)}</td><td class="r">${M(s.cmValue)}</td><td class="r ${ncClass(s.nc,b.limits)}" style="font-weight:700">${X(s.nc)}</td><td class="r">${P(s.mer,1)}</td><td class="r">${M(s.spend)}</td></tr>`).join("");
+  const chan=list.map(({b,s})=>`<div class="card"><h2>${esc(b.name)}</h2><div class="scroll"><table><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th></tr></thead><tbody>${[...b.channelList,{key:"engage",label:"Cubbo Engage"}].map(x=>{const v=s.ch[x.key]||0,vg=s.chG[x.key]||0,g=s.chGoal[x.key];return `<tr><td>${esc(x.label)}</td><td class="r">${M(v)}</td><td class="r">${g?M(g):"—"}</td><td class="r">${g?`<span class="pill ${paceClass(vg/g)}">${P(vg/g)}</span>`:"—"}</td></tr>`}).join("")}</tbody></table></div></div>`).join("");
+  return `${brandNav()}<header><div><div class="kicker">IncuBrands · Por fechas</div><h1>${rangeTitle(from,to)}</h1><div class="sub">Actualizado ${clock(data.general?.generatedAt)} · Montos con IVA</div></div>${generalNav()}</header>
+${rangeControls()}
+<section class="grid4">
+<div class="card pace dark"><div class="lab">Venta total vs objetivo</div><div class="big">${M(T.total)}</div><div class="note">Objetivo ${M(T.goal)} · ${P(pace)} del objetivo</div>${goalBar(T.totalG,T.goal)}${split((b,s)=>`${M(s.total)} de ${M(s.goal)}`)}</div>
+<div class="card pace"><div class="lab">Contribution margin · todas las marcas</div><div class="big">${cmBig(cmPct,T.cm)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div>${split((b,s)=>`${P(s.cmPct,1)} · ${M(s.cmValue)}`)}<div class="small">${costNote(list.some(({b})=>b.hasTikTok))}</div></div>
+<div class="card pace"><div class="lab">Gasto Meta Ads</div><div class="big">${M(T.spend)}</div><div class="note">En clientes nuevos ${M(T.spendNew)} · MER ${P(T.ecomm?T.spend/T.ecomm:null,1)}</div>${split((b,s)=>`${M(s.spend)} · NC-ROAS ${X(s.nc)}`)}</div>
+</section>
+<section class="card"><h2>Por marca</h2><div class="scroll"><table style="min-width:860px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th><th class="r">CM %</th><th class="r">CM $</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Gasto Meta Ads</th></tr></thead><tbody>${rows}</tbody></table></div><div class="small">NC-ROAS: venta sin IVA de clientes nuevos ÷ gasto en clientes nuevos. MER: gasto ÷ venta ecomm. El objetivo de hoy cuenta solo hasta la hora actual; antes del 8 nov no hay objetivo diario.</div></section>
+<section class="grid2">${chan}</section>`;
 }
 
 function render(){
@@ -295,7 +401,8 @@ function render(){
   const d=data.brands[brand];
   if(brand!=="general"&&!d){brand="general"}
   let body;
-  if(brand==="general")body=data.general?generalView(data.general):`${brandNav()}<section class="card"><h2>Todavía no hay datos generales</h2></section>`;
+  if(brand==="general")body=!data.general?`${brandNav()}<section class="card"><h2>Todavía no hay datos generales</h2></section>`:view==="fechas"?generalRangeView():generalView(data.general);
+  else if(view==="fechas"&&!d.error)body=d.series?brandRangeView(d):`${brandNav()}<section class="card"><h2>La vista por fechas aparece con la próxima actualización</h2></section>`;
   else if(d.error)body=`${brandNav()}<section class="card"><h2>${esc(d.name)} todavía no tiene datos</h2><div class="note">La conexión de esta marca no respondió en la última actualización.</div></section>`;
   else body=view==="vivo"?live(d):closeView(d);
   app.innerHTML=`<div class="wrap">${body}</div>`;
@@ -336,9 +443,14 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   catch(x){err.textContent=x.message==="sin-datos"?"Todavía no hay datos publicados.":"Contraseña incorrecta."}
 });
 document.addEventListener("click",(e)=>{
-  const v=e.target.closest("button[data-v]"),b=e.target.closest("button[data-b]");
-  if(v)go(brand,v.dataset.v);
-  else if(b)go(b.dataset.b,b.dataset.b==="general"?"vivo":view);
+  const v=e.target.closest("button[data-v]"),b=e.target.closest("button[data-b]"),r=e.target.closest("button[data-rf]");
+  if(r){rangeFrom=r.dataset.rf;rangeTo=r.dataset.rt;render()}
+  else if(v)go(brand,v.dataset.v);
+  else if(b)go(b.dataset.b,b.dataset.b==="general"&&view==="cierre"?"vivo":view);
+});
+document.addEventListener("change",(e)=>{
+  if(e.target.id==="rf"&&e.target.value){rangeFrom=e.target.value;render()}
+  if(e.target.id==="rt"&&e.target.value){rangeTo=e.target.value;render()}
 });
 addEventListener("hashchange",()=>{({brand,view}=route());render()});
 try{const saved=sessionStorage.getItem("bf-pw");if(saved)enter(saved).catch(()=>{})}catch{}

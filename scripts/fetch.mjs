@@ -111,12 +111,14 @@ async function loadRaw(plan, generatedAt, keys) {
   const today = mexicoNow(generatedAt).date;
   const ads = (fields, from, to) => windsor("facebook", plan.metaAccount, plan.metaAccountName, fields, from, to);
 
-  const [shopify, meta, adRows] = await Promise.all([
+  const [shopify, meta, adRows, metaCampaigns] = await Promise.all([
     loadShopify(plan, generatedAt, { clientId: keys.shopifyId, clientSecret: keys.shopifySecret }),
     ads(["date", "spend", "cpm", "frequency"], "2026-11-01", today),
     ads(["ad_name", "spend", "actions_omni_purchase", "purchase_roas_omni_purchase"], today, today),
+    // Por campaña, para separar el gasto en clientes existentes del de nuevos. Si falla, el NC-ROAS usa el gasto total.
+    ads(["date", "campaign", "spend"], "2026-11-01", today).catch(() => []),
   ]);
-  return { ...shopify, meta, ads: adRows };
+  return { ...shopify, meta, ads: adRows, metaCampaigns };
 }
 
 // El tablero de antes era de una sola marca (Twins): se lee como tal.
@@ -146,7 +148,7 @@ async function runBrand(plan, generatedAt, previous) {
   raw.metaTrack = last && last.spend === spend && last.date === raw.today ? last : { spend, date: raw.today, changedAt: generatedAt };
   const output = { ...compute(raw, plan), rawKlaviyo: raw.klaviyo };
   // El registro de Actions es público: aquí nunca van montos.
-  console.log(`OK ${plan.id} ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
+  console.log(`OK ${plan.id} ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · campañas ${raw.metaCampaigns.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
   return output;
 }
 
