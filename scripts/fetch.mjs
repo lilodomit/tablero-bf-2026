@@ -1,18 +1,22 @@
-// Jala Shopify y Klaviyo directo, Meta por Windsor, calcula y escribe site/data.enc cifrado.
+// Jala Shopify y Klaviyo directo, Meta por Windsor, para cada marca; calcula y escribe site/data.enc cifrado.
 // Lo corre GitHub Actions. Solo trabaja con datos reales y no usa ningún MCP.
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { compute, mexicoNow } from "./compute.mjs";
+import { compute, general, mexicoNow } from "./compute.mjs";
 import { open, seal } from "./crypto.mjs";
 import { loadShopify } from "./shopify.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const {
-  DASHBOARD_PASSWORD: PASSWORD, WINDSOR_API_KEY: WINDSOR, KLAVIYO_PRIVATE_KEY: KLAVIYO, GITHUB_REPOSITORY: REPO,
-  SHOPIFY_CLIENT_ID: SHOPIFY_ID, SHOPIFY_CLIENT_SECRET: SHOPIFY_SECRET,
-} = process.env;
+const { DASHBOARD_PASSWORD: PASSWORD, WINDSOR_API_KEY: WINDSOR, GITHUB_REPOSITORY: REPO } = process.env;
 if (!PASSWORD) throw new Error("Falta DASHBOARD_PASSWORD");
+
+// Llaves de cada marca en los secrets de GitHub. Twins conserva los nombres originales.
+const KEYS = {
+  twins: { shopifyId: "SHOPIFY_CLIENT_ID", shopifySecret: "SHOPIFY_CLIENT_SECRET", klaviyo: "KLAVIYO_PRIVATE_KEY" },
+  nook: { shopifyId: "NOOK_SHOPIFY_CLIENT_ID", shopifySecret: "NOOK_SHOPIFY_CLIENT_SECRET", klaviyo: "NOOK_KLAVIYO_PRIVATE_KEY" },
+};
+const keysFor = (id) => Object.fromEntries(Object.entries(KEYS[id]).map(([k, name]) => [k, process.env[name]]));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -36,17 +40,16 @@ async function windsor(connector, account, accountName, fields, from, to) {
   return [];
 }
 
-async function klaviyoRequest(url, body) {
-  const response = await fetch(url.startsWith("https://") ? url : `https://a.klaviyo.com/api/${url}`, {
-    method: body ? "POST" : "GET",
-    headers: { Authorization: `Klaviyo-API-Key ${KLAVIYO}`, revision: "2024-10-15", accept: "application/json", "content-type": "application/json" },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (!response.ok) throw new Error(`Klaviyo ${url} respondió ${response.status}`);
-  return response.json();
-}
-
-export async function loadKlaviyo(plan, generatedAt) {
+export async function loadKlaviyo(plan, generatedAt, key) {
+  const klaviyoRequest = async (url, body) => {
+    const response = await fetch(url.startsWith("https://") ? url : `https://a.klaviyo.com/api/${url}`, {
+      method: body ? "POST" : "GET",
+      headers: { Authorization: `Klaviyo-API-Key ${key}`, revision: "2024-10-15", accept: "application/json", "content-type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!response.ok) throw new Error(`Klaviyo ${url.split("?")[0]} respondió ${response.status}`);
+    return response.json();
+  };
   const timeframe = { start: `${plan.promoStart}T06:00:00+00:00`, end: generatedAt };
   const campaignReport = await klaviyoRequest("campaign-values-reports/", {
     data: { type: "campaign-values-report", attributes: { timeframe, conversion_metric_id: plan.klaviyoPlacedOrder, statistics: ["recipients", "conversion_value"], filter: 'equals(send_channel,"email")' } },
@@ -104,45 +107,75 @@ async function previousSnapshot() {
   }
 }
 
-async function loadRaw(plan, generatedAt) {
+async function loadRaw(plan, generatedAt, keys) {
   const today = mexicoNow(generatedAt).date;
   const ads = (fields, from, to) => windsor("facebook", plan.metaAccount, plan.metaAccountName, fields, from, to);
 
   const [shopify, meta, adRows] = await Promise.all([
-    loadShopify(plan, generatedAt, { clientId: SHOPIFY_ID, clientSecret: SHOPIFY_SECRET }),
+    loadShopify(plan, generatedAt, { clientId: keys.shopifyId, clientSecret: keys.shopifySecret }),
     ads(["date", "spend", "cpm", "frequency"], "2026-11-01", today),
     ads(["ad_name", "spend", "actions_omni_purchase", "purchase_roas_omni_purchase"], today, today),
   ]);
   return { ...shopify, meta, ads: adRows };
 }
 
-async function main() {
-  const generatedAt = new Date().toISOString();
-  const plan = await open(await readFile(path.join(ROOT, "plan.enc"), "utf8"), PASSWORD);
-  if (!WINDSOR) throw new Error("Falta WINDSOR_API_KEY");
-  if (!SHOPIFY_ID || !SHOPIFY_SECRET) throw new Error("Faltan SHOPIFY_CLIENT_ID o SHOPIFY_CLIENT_SECRET");
-  const previous = await previousSnapshot();
-  const raw = { generatedAt, ...(await loadRaw(plan, generatedAt)) };
+// El tablero de antes era de una sola marca (Twins): se lee como tal.
+function previousBrand(previous, id) {
+  if (!previous) return null;
+  if (previous.brands) return previous.brands[id] ?? null;
+  return id === "twins" ? previous : null;
+}
+
+async function runBrand(plan, generatedAt, previous) {
+  const keys = keysFor(plan.id);
+  if (!keys.shopifyId || !keys.shopifySecret) throw new Error("faltan las llaves de Shopify");
+  const raw = { generatedAt, ...(await loadRaw(plan, generatedAt, keys)) };
   // Sin gasto real la regla de Meta diría algo falso: mejor falla y queda el último dato bueno.
   if (!raw.meta.length) throw new Error("Windsor no regresó datos de Meta");
   const minute = new Date(generatedAt).getUTCMinutes();
-  const klaviyoDue = minute % 30 < 5 || !previous?.rawKlaviyo;
   raw.klaviyo = previous?.rawKlaviyo ?? null;
-  if (KLAVIYO && klaviyoDue) {
+  if (keys.klaviyo && (minute % 30 < 5 || !raw.klaviyo)) {
     try {
-      raw.klaviyo = await loadKlaviyo(plan, generatedAt);
+      raw.klaviyo = await loadKlaviyo(plan, generatedAt, keys.klaviyo);
     } catch (error) {
-      console.warn(`Klaviyo no respondió, se conserva el dato anterior: ${error.message}`);
+      console.warn(`${plan.id}: Klaviyo no respondió, se conserva el dato anterior (${error.message})`);
     }
   }
   const spend = raw.meta.find((row) => row.date === raw.today)?.spend ?? 0;
   const last = previous?.meta?.track;
   raw.metaTrack = last && last.spend === spend && last.date === raw.today ? last : { spend, date: raw.today, changedAt: generatedAt };
-
   const output = { ...compute(raw, plan), rawKlaviyo: raw.klaviyo };
-  await writeFile(path.join(ROOT, "site", "data.enc"), await seal(output, PASSWORD));
   // El registro de Actions es público: aquí nunca van montos.
-  console.log(`OK ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
+  console.log(`OK ${plan.id} ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
+  return output;
+}
+
+export async function main() {
+  const generatedAt = new Date().toISOString();
+  const plan = await open(await readFile(path.join(ROOT, "plan.enc"), "utf8"), PASSWORD);
+  if (!WINDSOR) throw new Error("Falta WINDSOR_API_KEY");
+  const previous = await previousSnapshot();
+
+  const results = await Promise.all(plan.brands.map(async (brandPlan) => {
+    const before = previousBrand(previous, brandPlan.id);
+    try {
+      return await runBrand(brandPlan, generatedAt, before);
+    } catch (error) {
+      // Una marca que falla no tumba a la otra: se queda con su último dato bueno, marcado como atrasado.
+      console.warn(`${brandPlan.id}: no se actualizó (${error.message})`);
+      return before ? { ...before, stale: true } : { id: brandPlan.id, name: brandPlan.name, error: true };
+    }
+  }));
+  if (results.every((r) => r.error || r.stale)) throw new Error("Ninguna marca se pudo actualizar");
+
+  const brands = Object.fromEntries(results.map((r) => [r.id, r]));
+  const output = {
+    generatedAt,
+    order: plan.brands.map((b) => b.id),
+    brands,
+    general: general(results.filter((r) => !r.error), generatedAt),
+  };
+  await writeFile(path.join(ROOT, "site", "data.enc"), await seal(output, PASSWORD));
   return output;
 }
 

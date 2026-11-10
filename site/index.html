@@ -101,12 +101,15 @@ td{padding:8px 8px 8px 0;border-top:1px solid var(--track);font-variant-numeric:
 #gate input{font:inherit;min-height:44px;padding:0 12px;border:1px solid #DCD6CC;border-radius:10px}
 #gate button{font:inherit;font-weight:700;min-height:44px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);cursor:pointer}
 #err{font-size:13px;color:var(--bad);min-height:18px}
+.split{line-height:1.5}.dark .split{color:var(--soft)}.split strong{color:inherit;font-weight:700}
+.link{font:inherit;font-weight:700;background:none;border:0;padding:0;color:var(--ink);text-decoration:underline;cursor:pointer;text-align:left}
+nav[aria-label=Marca]{border-bottom:1px solid var(--line);padding-bottom:16px}
 </style>
 </head>
 <body>
 <main id="gate">
 <form id="login">
-<div class="kicker">Twins &amp; Icons</div>
+<div class="kicker">IncuBrands</div>
 <h1>Buen Fin 2026</h1>
 <label for="pw">Contraseña</label>
 <input id="pw" type="password" autocomplete="current-password" required>
@@ -128,18 +131,33 @@ const clock=(iso)=>iso?new Date(iso).toLocaleTimeString("es-MX",{timeZone:"Ameri
 const prog=(label,value,pct,marker)=>`<div class="prog"><div class="spread"><span>${label}</span><strong>${value}</strong></div><div class="bar t"><i style="width:${clamp(pct*100)}%"></i>${marker!==undefined?`<u style="left:${clamp(marker*100)}%"></u>`:""}</div></div>`;
 const kpi=(l,v,s)=>`<div class="kpi"><div class="lab">${l}</div><b>${v}</b><div class="small">${s}</div></div>`;
 
-let data=null,view=location.hash==="#cierre"?"cierre":"vivo",key=null,lastText="";
+// Ruta: #general, #<marca> (en vivo) o #<marca>-cierre. #cierre y #vivo vienen del tablero de una sola marca (Twins).
+const route=()=>{const h=location.hash.slice(1);if(h==="cierre")return{brand:"twins",view:"cierre"};if(!h||h==="vivo"||h==="general")return{brand:h==="vivo"?"twins":"general",view:"vivo"};const[b,v]=h.split("-");return{brand:b,view:v==="cierre"?"cierre":"vivo"}};
+let data=null,{brand,view}=route(),key=null,lastText="";
+const go=(b,v)=>{brand=b;view=v;history.replaceState(null,"",b==="general"?"#general":v==="cierre"?`#${b}-cierre`:`#${b}`);render()};
+
+function brandNav(){
+  const tabs=[["general","General"],...data.order.map(id=>[id,data.brands[id].name])];
+  return `<nav aria-label="Marca">${tabs.map(([id,name])=>`<button data-b="${id}" aria-pressed="${brand===id}">${esc(name)}</button>`).join("")}</nav>`;
+}
 
 function head(d){
   const title=view==="vivo"?`${dayLabel(d.today)} · ${d.phase?d.phase.name:"Noviembre"}`:(d.close?`Cierre del ${dayLabel(d.close.date)}`:"Cierre de ayer");
   const age=Math.round((Date.now()-Date.parse(d.generatedAt))/60000);
-  const stale=age>20?`<span class="stale"> · Sin actualizar hace ${age} min</span>`:"";
-  return `<header><div><div class="kicker">Twins &amp; Icons · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button></nav></header>`;
+  const stale=age>20||d.stale?`<span class="stale"> · Sin actualizar hace ${age} min</span>`:"";
+  return `${brandNav()}<header><div><div class="kicker">${esc(d.name)} · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta Ads sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button></nav></header>`;
+}
+
+// Tarjeta de contribution margin: costos de Triple Whale, todos los canales, después de Meta Ads.
+function cmCard(cm,label){
+  if(!cm)return `<div class="card pace"><div class="lab">Contribution margin</div><div class="big">—</div><div class="note">Faltan los costos de Triple Whale de esta marca</div></div>`;
+  const t=cm.today??cm,y=cm.yesterday,p=cm.promo;
+  return `<div class="card pace"><div class="lab">Contribution margin ${label}</div><div class="big">${M(t?.value)}</div><div class="note">${P(t?.pct,1)} de la venta sin IVA · después de Meta Ads</div>${y?`<div class="note">Ayer ${M(y.value)} · ${P(y.pct,1)}</div>`:""}${p?`<div class="note">Acumulado promo ${M(p.value)} · ${P(p.pct,1)}</div>`:""}<div class="small">Costos de Triple Whale: COGS, IVA, envío, pasarela y fulfillment${t?.partial?" · sin la marca que no tiene costos":""}</div></div>`;
 }
 
 function live(d){
   const m=d.month,day=d.day,meta=d.meta,limits=d.limits,monthPct=m.mtd/d.goal,mark=m.expected/d.goal,monthPace=m.expected?m.mtd/m.expected:null;
-  const scen=[12,14,15,16,18,20],pick=scen.reduce((a,b)=>Math.abs(b*1e6-m.projection)<Math.abs(a*1e6-m.projection)?b:a);
+  const scen=[.8,.93,1,1.07,1.2,1.33].map(f=>Math.round(d.goal*f/1e5)/10),pick=scen.reduce((a,b)=>Math.abs(b*1e6-m.projection)<Math.abs(a*1e6-m.projection)?b:a);
   const alerts=d.alerts.length?d.alerts.map(a=>`<div class="alert ${a.level}"><b>${esc(a.tag)}</b><span>${esc(a.text)}</span></div>`).join(""):`<div class="alert good"><b>Sin alertas</b><span>Todo dentro del plan a esta hora</span></div>`;
   const lyCmp=day.lySoFar&&day.lySoFar>0?`<span class="small">vs misma fecha 2025 a esta hora: ${day.real>=day.lySoFar?"+":""}${Math.round((day.real/day.lySoFar-1)*100)}%</span>`:"";
   const actionClass={subir:"good",mantener:"warn",bajar:"bad"}[d.decision.action];
@@ -170,11 +188,12 @@ function live(d){
 <div class="card pace"><div class="lab">Hoy vs objetivo del día</div><div class="big">${M(day.real)}</div><div class="note">Objetivo del día ${M(day.plan?.total)} · a esta hora ${M(day.expected)}</div><div class="note">Cierre proyectado <strong>${day.projection==null?"—":M(day.projection)}</strong> · ${day.projection!=null&&day.plan?.total?P(day.projection/day.plan.total)+" del objetivo":"se calcula después de las primeras horas"}</div><div class="row"><span class="pill ${paceClass(day.pace)}">${P(day.pace)} del pacing</span>${lyCmp}</div></div>
 <div class="card pace"><div class="lab">${d.phase?`Fase ${d.phase.name} (${d.phase.label} nov)`:"Fase"}</div><div class="big">${M(d.phase?.real)}</div><div class="note">de ${M(d.phase?.total)} · Ecomm ${M(d.phase?.ecommReal)} de ${M(d.phase?.ecomm)}</div><div class="bar"><i style="width:${clamp(d.phase?d.phase.real/d.phase.total*100:0)}%"></i></div></div>
 <div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(m.projection)}</div><div class="note">Al ritmo actual · ${P(m.ratio)} del plan</div><div class="scen" aria-label="Escenarios">${scen.map(s=>`<div class="${s===pick?"on":""}">${s}M</div>`).join("")}</div></div>
+${cmCard(d.cm,"hoy")}
 </section>
 <section class="card" aria-label="Meta Ads" style="gap:20px">
 <div class="spread"><h2>Meta Ads · ¿subo, mantengo o bajo?</h2><div class="action ${actionClass}"><strong>Acción: ${d.decision.action}</strong><span>${esc(d.decision.reason)}</span></div></div>
 <div class="kpis">
-${kpi("Gasto hoy",M(metaToday.spend),`Plan $15M ${M(metaToday.plan15)} · nivel $20M ${M(metaToday.plan20)}`)}
+${kpi("Gasto hoy",M(metaToday.spend),`Plan ${M(metaToday.plan15)} · para escalar ${M(metaToday.plan20)}`)}
 ${kpi("NC-ROAS hoy",X(metaToday.nc),`Objetivo 20%: ${X(limits.obj)} · piso ${X(limits.piso)}`)}
 ${kpi("Margen clientes nuevos",P(metaToday.margin,1),"Después de Meta · objetivo 20%")}
 ${kpi("MER web hoy",X(metaToday.mer),"Venta ecomm ÷ gasto Meta")}
@@ -182,8 +201,8 @@ ${kpi("CAC cliente nuevo",M(metaToday.cac),`Máximo al 20%: ${M(limits.cacMax)}`
 ${kpi("CPM · frecuencia",`$${Math.round(metaToday.cpm)} · ${metaToday.frequency.toFixed(1)}`,`Oct: $${Math.round(meta.oct.cpm)} · ${meta.oct.frequency.toFixed(1)}`)}
 </div>
 <div class="grid3" style="gap:24px">
-<div style="display:flex;flex-direction:column;gap:10px;min-width:0"><div style="font-size:14px;font-weight:700">NC-ROAS diario contra el objetivo de 20%</div><div class="chart">${rule(limits.obj,"var(--good)",X(limits.obj)+" · objetivo 20%")}${rule(limits.piso,"var(--bad)",X(limits.piso)+" · piso")}<div class="bars">${bars}</div></div><div class="labels">${labels}</div><div class="small">Objetivo y piso se recalculan con el acumulado de la promo, con la receta del motor de ROAS. Dos días seguidos abajo del objetivo: regresar al nivel anterior. Arriba del objetivo con MER de 5x o más: subir al nivel de $20M.</div></div>
-<div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div style="font-size:14px;font-weight:700">Gasto acumulado 8–30 nov</div>${prog(`vs plan de $15M (${M(meta.cumulative.plan15)})`,`${M(meta.cumulative.spend)} · ${P(meta.cumulative.spend/meta.cumulative.plan15)}`,meta.cumulative.spend/meta.cumulative.plan15)}${prog(`vs tope aprobado ${M(meta.cumulative.cap)}`,P(meta.cumulative.spend/meta.cumulative.cap),meta.cumulative.spend/meta.cumulative.cap)}${prog(`Hoy vs plan $15M (${M(metaToday.plan15)})`,`${M(metaToday.spend)} · ${P(metaToday.plan15?metaToday.spend/metaToday.plan15:0)}`,metaToday.plan15?metaToday.spend/metaToday.plan15:0,d.frac)}<div class="small">Línea naranja: donde debería ir el gasto a esta hora</div><div style="font-size:14px;font-weight:700;margin-top:6px">Top ads de hoy por gasto</div><div class="scroll"><table><thead><tr><th>Anuncio</th><th class="r">Gasto</th><th class="r">ROAS Meta</th><th class="r">CPA</th></tr></thead><tbody>${ads}</tbody></table></div><div class="small">El ROAS de Meta solo sirve para comparar anuncios entre sí.</div></div>
+<div style="display:flex;flex-direction:column;gap:10px;min-width:0"><div style="font-size:14px;font-weight:700">NC-ROAS diario contra el objetivo de 20%</div><div class="chart">${rule(limits.obj,"var(--good)",X(limits.obj)+" · objetivo 20%")}${rule(limits.piso,"var(--bad)",X(limits.piso)+" · piso")}<div class="bars">${bars}</div></div><div class="labels">${labels}</div><div class="small">Objetivo y piso se recalculan con el acumulado de la promo, con la receta del motor de ROAS. Dos días seguidos abajo del objetivo: regresar al nivel anterior. Arriba del objetivo con MER de 5x o más: subir al nivel para escalar, un tercio arriba del plan.</div></div>
+<div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div style="font-size:14px;font-weight:700">Gasto acumulado 8–30 nov</div>${prog(`vs plan (${M(meta.cumulative.plan15)})`,`${M(meta.cumulative.spend)} · ${P(meta.cumulative.spend/meta.cumulative.plan15)}`,meta.cumulative.spend/meta.cumulative.plan15)}${meta.cumulative.cap?prog(`vs tope aprobado ${M(meta.cumulative.cap)}`,P(meta.cumulative.spend/meta.cumulative.cap),meta.cumulative.spend/meta.cumulative.cap):""}${prog(`Hoy vs plan (${M(metaToday.plan15)})`,`${M(metaToday.spend)} · ${P(metaToday.plan15?metaToday.spend/metaToday.plan15:0)}`,metaToday.plan15?metaToday.spend/metaToday.plan15:0,d.frac)}<div class="small">Línea naranja: donde debería ir el gasto a esta hora</div><div style="font-size:14px;font-weight:700;margin-top:6px">Top ads de hoy por gasto</div><div class="scroll"><table><thead><tr><th>Anuncio</th><th class="r">Gasto</th><th class="r">ROAS Meta</th><th class="r">CPA</th></tr></thead><tbody>${ads}</tbody></table></div><div class="small">El ROAS de Meta solo sirve para comparar anuncios entre sí.</div></div>
 </div>
 </section>
 <section class="card" aria-label="Venta por hora">
@@ -208,7 +227,7 @@ function closeView(d){
   if(!c)return head(d)+`<section class="card"><h2>Todavía no hay un día cerrado del evento</h2></section>`;
   const a=d.decision,m=c.meta,pl=c.plan,pct=(v,g)=>g?v/g:null;
   const badge=(p)=>`<span class="pill ${paceClass(p)}">${P(p)}</span>`;
-  const chan=[["Ecomm",c.day.ecomm,pl.ecomm],["TikTok Shop",c.day.tiktok,pl.tiktok],["Isla Santa Fe",c.day.isla,pl.isla]].map(([n,v,g])=>`<tr><td>${n}</td><td class="r">${M(v)}</td><td class="r">${M(g)}</td><td class="r">${badge(pct(v,g))}</td><td class="r">${P(c.day.total?v/c.day.total:0)}</td></tr>`).join("")+`<tr><td>Cubbo Engage</td><td class="r">${M(c.day.engage)}</td><td class="r">—</td><td class="r">—</td><td class="r">${P(c.day.total?c.day.engage/c.day.total:0)}</td></tr><tr style="font-weight:700"><td style="border-top:2px solid var(--ink)">Total</td><td class="r" style="border-top:2px solid var(--ink)">${M(c.day.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(pl.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${badge(pct(c.day.total,pl.total))}</td><td class="r" style="border-top:2px solid var(--ink)">100%</td></tr>`;
+  const chan=(c.channels||[]).map(x=>[x.label,x.value,x.goal]).map(([n,v,g])=>`<tr><td>${n}</td><td class="r">${M(v)}</td><td class="r">${M(g)}</td><td class="r">${badge(pct(v,g))}</td><td class="r">${P(c.day.total?v/c.day.total:0)}</td></tr>`).join("")+`<tr><td>Cubbo Engage</td><td class="r">${M(c.day.engage)}</td><td class="r">—</td><td class="r">—</td><td class="r">${P(c.day.total?c.day.engage/c.day.total:0)}</td></tr><tr style="font-weight:700"><td style="border-top:2px solid var(--ink)">Total</td><td class="r" style="border-top:2px solid var(--ink)">${M(c.day.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(pl.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${badge(pct(c.day.total,pl.total))}</td><td class="r" style="border-top:2px solid var(--ink)">100%</td></tr>`;
   const ruleOf=(h,prev)=>{if(h.nc===null)return["—","neutral"];if(prev&&h.nc<d.limits.obj&&prev.nc<d.limits.obj)return["Bajar","bad"];if(h.nc>=d.limits.obj&&h.mer>=5)return["Subir","good"];return["Mantener","neutral"]};
   const done=d.meta.history.filter(h=>!h.today);
   const metaRows=done.map((h,i)=>{const[r,cl]=ruleOf(h,done[i-1]);return `<tr><td>${dayLabel(h.date)}</td><td class="r">${M(h.plan15)}</td><td class="r">${M(h.plan20)}</td><td class="r">${M(h.spend)}</td><td class="r" style="color:var(--muted)">${M(h.ly)}</td><td class="r" style="font-weight:700">${X(h.nc)}</td><td class="r">${X(h.mer,1)}</td><td class="r">${P(h.margin,1)}</td><td style="padding-left:16px"><span class="pill ${cl}">${r}</span></td></tr>`}).join("");
@@ -217,27 +236,60 @@ function closeView(d){
   const top=(l,v,s,b,cl)=>`<div class="card" style="gap:8px"><div class="lab">${l}</div><div class="big" style="font-size:36px">${v}</div><div class="note" style="font-size:13px">${s}</div><div><span class="pill ${cl}">${b}</span></div></div>`;
   const ky=d.klaviyo?.yesterday;
   return head(d)+`
-<section class="decision"><div style="flex:1 1 520px;display:flex;flex-direction:column;gap:8px"><div class="lab" style="color:var(--soft)">Decisión de Meta Ads para hoy, según las reglas</div><h2 style="text-transform:capitalize">${a.action}</h2><div style="font-size:15px;color:var(--soft)">${esc(a.reason)} Presupuesto de hoy: ${M(t?.meta15)} (nivel $20M: ${M(t?.meta20)}).</div></div><div class="row" style="gap:12px"><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">NC-ROAS ayer</div><b>${X(m?.nc)}</b></div><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">Margen nuevos</div><b style="color:#9FD8B5">${P(m?.margin,1)}</b></div></div></section>
+<section class="decision"><div style="flex:1 1 520px;display:flex;flex-direction:column;gap:8px"><div class="lab" style="color:var(--soft)">Decisión de Meta Ads para hoy, según las reglas</div><h2 style="text-transform:capitalize">${a.action}</h2><div style="font-size:15px;color:var(--soft)">${esc(a.reason)} Presupuesto de hoy: ${M(t?.meta15)} (para escalar: ${M(t?.meta20)}).</div></div><div class="row" style="gap:12px"><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">NC-ROAS ayer</div><b>${X(m?.nc)}</b></div><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">Margen nuevos</div><b style="color:#9FD8B5">${P(m?.margin,1)}</b></div></div></section>
 <section class="grid4">
 ${top("Venta de ayer",M(c.day.total),`Objetivo del día ${M(pl.total)} · 2025: ${M(pl.lyTotal)}`,`${P(pct(c.day.total,pl.total))} del objetivo`,paceClass(pct(c.day.total,pl.total)))}
 ${top("Noviembre acumulado",M(c.mtd),`Deberíamos ir en ${M(c.mtdExpected)} de ${M(d.goal)}`,`${P(pct(c.mtd,c.mtdExpected))} del pacing`,paceClass(pct(c.mtd,c.mtdExpected)))}
-${top("Gasto Meta ayer",M(m?.spend),`Plan $15M ${M(m?.plan15)} · 2025: ${M(m?.ly)}`,`${P(m?pct(m.spend,m.plan15):null)} del plan`,"neutral")}
+${top("Gasto Meta Ads ayer",M(m?.spend),`Plan ${M(m?.plan15)} · 2025: ${M(m?.ly)}`,`${P(m?pct(m.spend,m.plan15):null)} del plan`,"neutral")}
 ${top("Proyección de mes",M(d.month.projection),`Objetivo ${M(d.goal)}`,`${d.month.projection>=d.goal?"+":"−"}${M(Math.abs(d.month.projection-d.goal))} vs objetivo`,d.month.projection>=d.goal?"good":"warn")}
+${d.cm?top("Contribution margin ayer",M(d.cm.yesterday?.value),`${P(d.cm.yesterday?.pct,1)} de la venta sin IVA · costos de Triple Whale`,`Acumulado promo ${M(d.cm.promo?.value)}`,"neutral"):""}
 </section>
 <section class="card"><h2>Venta de ayer por canal</h2><div class="scroll"><table style="min-width:560px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">% de la venta</th></tr></thead><tbody>${chan}</tbody></table></div></section>
-<section class="card"><div class="spread"><h2>Meta Ads día por día · gasto, NC-ROAS y margen</h2><div class="small">Objetivo 20%: ${X(d.limits.obj)} · gasto acumulado ${M(d.meta.cumulative.spend)} de ${M(d.meta.cumulative.plan15)}</div></div><div class="scroll"><table style="min-width:820px;font-size:14px"><thead><tr><th>Día</th><th class="r">Plan $15M</th><th class="r">Nivel $20M</th><th class="r">Gasto real</th><th class="r">2025</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Margen</th><th style="padding-left:16px">Regla</th></tr></thead><tbody>${metaRows}</tbody></table></div></section>
+<section class="card"><div class="spread"><h2>Meta Ads día por día · gasto, NC-ROAS y margen</h2><div class="small">Objetivo 20%: ${X(d.limits.obj)} · gasto acumulado ${M(d.meta.cumulative.spend)} de ${M(d.meta.cumulative.plan15)}</div></div><div class="scroll"><table style="min-width:820px;font-size:14px"><thead><tr><th>Día</th><th class="r">Plan</th><th class="r">Para escalar</th><th class="r">Gasto real</th><th class="r">2025</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Margen</th><th style="padding-left:16px">Regla</th></tr></thead><tbody>${metaRows}</tbody></table></div></section>
 <section class="grid3">
 <div class="card"><h2 style="font-size:18px">Ecomm ayer</h2>${[["Órdenes",c.orders.toLocaleString("en-US")],["AOV · base "+M(d.ticket.base),M(c.aov)],["Piezas por orden",c.pieces?c.pieces.toFixed(2):"—"],["Órdenes con 3+ piezas",P(c.kit.share)],["Clientes nuevos (% venta)",P(c.freshShare)],["NC-ROAS",X(m?.nc)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
 <div class="card"><h2 style="font-size:18px">Base propia ayer</h2>${[["Klaviyo total",M(ky?.total)],["Campañas",M(ky?.campaigns)],["Flows",M(ky?.flows)],["Cubbo Engage",M(d.engage.yesterday.revenue)],["Órdenes Cubbo Engage",d.engage.yesterday.orders],...[...(d.klaviyo?.flows||[])].filter(f=>f.yesterday).sort((a,b)=>b.yesterday-a.yesterday).slice(0,3).map(f=>["Flow · "+esc(f.name),M(f.yesterday)])].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
-<div class="card"><h2 style="font-size:18px">Plan de hoy · ${dayLabel(d.today)}</h2>${[["Objetivo de venta",M(t?.total)],["Ecomm",M(t?.ecomm)],["Presupuesto Meta Ads (plan $15M)",M(t?.meta15)],["Nivel $20M si se escala",M(t?.meta20)],["TikTok",M(t?.tiktok)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
+<div class="card"><h2 style="font-size:18px">Plan de hoy · ${dayLabel(d.today)}</h2>${[["Objetivo de venta",M(t?.total)],...(d.channelList||[]).map(x=>[x.label,M(t?.[x.key])]),["Presupuesto Meta Ads",M(t?.meta15)],["Nivel para escalar",M(t?.meta20)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
 </section>
 <section class="card"><h2 style="font-size:18px">Para resolver en la junta</h2>${todos}</section>`;
+}
+
+function generalView(g){
+  const age=Math.round((Date.now()-Date.parse(g.generatedAt))/60000);
+  const lagging=data.order.filter(id=>data.brands[id].stale||data.brands[id].error).map(id=>data.brands[id].name);
+  const warn=age>20?`<span class="stale"> · Sin actualizar hace ${age} min</span>`:lagging.length?`<span class="stale"> · ${esc(lagging.join(", "))} sin actualizar</span>`:"";
+  const monthPace=g.month.expected?g.month.mtd/g.month.expected:null,dayPace=g.day.expected?g.day.real/g.day.expected:null;
+  // Desglose en chiquito debajo de cada total: cuánto aporta cada marca.
+  const split=(fn)=>`<div class="small split">${g.brands.map(b=>`${esc(b.name)} <strong>${fn(b)}</strong>`).join(" · ")}</div>`;
+  const cmSplit=(pick)=>split(b=>b.cm?.[pick]?`${M(b.cm[pick].value)} (${P(b.cm[pick].pct,1)})`:"sin costos");
+  const brandRows=g.brands.map(b=>`<tr><td><button class="link" data-b="${b.id}">${esc(b.name)}</button></td><td class="r">${M(b.day.real)}</td><td class="r">${M(b.day.goal)}</td><td class="r"><span class="pill ${paceClass(b.day.pace)}">${P(b.day.pace)}</span></td><td class="r">${M(b.day.projection)}</td><td class="r">${M(b.month.mtd)}</td><td class="r">${M(b.goal)}</td><td class="r">${M(b.month.projection)}</td><td class="r">${M(b.cm?.today?.value)}</td><td class="r">${P(b.cm?.today?.pct,1)}</td><td class="r">${M(b.spend)}</td></tr>`).join("");
+  const totalRow=`<tr style="font-weight:700"><td style="border-top:2px solid var(--ink)">Total</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.day.real)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.day.goal)}</td><td class="r" style="border-top:2px solid var(--ink)"><span class="pill ${paceClass(dayPace)}">${P(dayPace)}</span></td><td class="r" style="border-top:2px solid var(--ink)">${M(g.day.projection)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.month.mtd)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.goal)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.month.projection)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.cm.today?.value)}</td><td class="r" style="border-top:2px solid var(--ink)">${P(g.cm.today?.pct,1)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(g.spend.today)}</td></tr>`;
+  const channelCards=g.brands.map(b=>{
+    const y=Object.fromEntries((b.channelsYesterday||[]).map(c=>[c.label,c.value]));
+    const rows=b.channels.map(c=>`<tr><td>${esc(c.label)}</td><td class="r">${M(c.value)}</td><td class="r">${c.goal?M(c.goal):"—"}</td><td class="r">${c.goal?`<span class="pill ${paceClass(c.value/c.goal/(g.day.goal&&g.day.expected?g.day.expected/g.day.goal:1))}">${P(c.value/c.goal)}</span>`:"—"}</td><td class="r">${M(y[c.label])}</td></tr>`).join("");
+    return `<div class="card"><div class="spread"><h2>${esc(b.name)}</h2><button class="link" data-b="${b.id}">Ver marca</button></div><div class="scroll"><table><thead><tr><th>Canal</th><th class="r">Hoy</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">Ayer</th></tr></thead><tbody>${rows}</tbody></table></div><div class="row"><span class="small">${b.cm?`Contribution margin hoy ${M(b.cm.today?.value)} (${P(b.cm.today?.pct,1)}) · ayer ${M(b.cm.yesterday?.value)} (${P(b.cm.yesterday?.pct,1)})`:"Contribution margin: faltan los costos de Triple Whale de esta marca"}</span></div></div>`;
+  }).join("");
+  return `${brandNav()}<header><div><div class="kicker">IncuBrands · Buen Fin 2026</div><h1>${dayLabel(g.today)} · General</h1><div class="sub">Actualizado ${clock(g.generatedAt)} · Montos con IVA${warn}</div></div></header>
+<section class="grid4" aria-label="Pacing general">
+<div class="card pace dark"><div class="lab">Noviembre vs objetivo total</div><div class="big">${M(g.month.mtd)}</div><div class="note">de ${M(g.goal)} · faltan ${M(g.goal-g.month.mtd)}</div><div class="bar"><i style="width:${clamp(g.month.mtd/g.goal*100)}%"></i><u style="left:${clamp(g.month.expected/g.goal*100)}%"></u></div><div class="note" style="font-size:13px">Deberíamos ir en ${M(g.month.expected)} (línea naranja) · <strong style="color:#F2C27A">${P(monthPace)} del pacing</strong></div>${split(b=>`${M(b.month.mtd)} de ${M(b.goal)}`)}</div>
+<div class="card pace"><div class="lab">Hoy vs objetivo del día</div><div class="big">${M(g.day.real)}</div><div class="note">Objetivo del día ${M(g.day.goal)} · a esta hora ${M(g.day.expected)}</div><div class="note">Cierre proyectado <strong>${M(g.day.projection)}</strong>${g.day.projection!=null&&g.day.goal?" · "+P(g.day.projection/g.day.goal)+" del objetivo":""}</div><div class="row"><span class="pill ${paceClass(dayPace)}">${P(dayPace)} del pacing</span></div>${split(b=>`${M(b.day.real)} de ${M(b.day.goal)}`)}</div>
+<div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(g.month.projection)}</div><div class="note">Objetivo ${M(g.goal)} · ${g.month.projection>=g.goal?"+":"−"}${M(Math.abs(g.month.projection-g.goal))}</div><div class="note">Ayer cerró en ${M(g.yesterday.real)} de ${M(g.yesterday.goal)}</div>${split(b=>M(b.month.projection))}</div>
+<div class="card pace"><div class="lab">Contribution margin hoy · todas las marcas</div><div class="big">${M(g.cm.today?.value)}</div><div class="note">${P(g.cm.today?.pct,1)} de la venta sin IVA · después de Meta Ads</div>${cmSplit("today")}<div class="note">Ayer ${M(g.cm.yesterday?.value)} · ${P(g.cm.yesterday?.pct,1)}</div>${cmSplit("yesterday")}<div class="note">Acumulado promo ${M(g.cm.promo?.value)} · ${P(g.cm.promo?.pct,1)}</div>${cmSplit("promo")}<div class="small">Costos de Triple Whale: COGS, IVA, envío, pasarela y fulfillment</div></div>
+</section>
+<section class="card" aria-label="Por marca"><h2>Por marca</h2><div class="scroll"><table style="min-width:980px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Hoy</th><th class="r">Objetivo hoy</th><th class="r">Pacing</th><th class="r">Proyección día</th><th class="r">Noviembre</th><th class="r">Objetivo mes</th><th class="r">Proyección mes</th><th class="r">CM hoy</th><th class="r">CM %</th><th class="r">Meta Ads hoy</th></tr></thead><tbody>${brandRows}${totalRow}</tbody></table></div><div class="small">Contribution margin con los costos de Triple Whale, todos los canales, después de Meta Ads. % sobre la venta sin IVA.${g.brands.some(b=>!b.cm)?` El total no incluye a ${esc(g.brands.filter(b=>!b.cm).map(b=>b.name).join(", "))} hasta tener sus costos.`:""}</div></section>
+<section class="grid2" aria-label="Venta por canal">${channelCards}</section>`;
 }
 
 function render(){
   if(!data)return;
   const app=document.getElementById("app"),y=scrollY;
-  app.innerHTML=`<div class="wrap">${view==="vivo"?live(data):closeView(data)}</div>`;
+  const d=data.brands[brand];
+  if(brand!=="general"&&!d){brand="general"}
+  let body;
+  if(brand==="general")body=data.general?generalView(data.general):`${brandNav()}<section class="card"><h2>Todavía no hay datos generales</h2></section>`;
+  else if(d.error)body=`${brandNav()}<section class="card"><h2>${esc(d.name)} todavía no tiene datos</h2><div class="note">La conexión de esta marca no respondió en la última actualización.</div></section>`;
+  else body=view==="vivo"?live(d):closeView(d);
+  app.innerHTML=`<div class="wrap">${body}</div>`;
   scrollTo(0,y);
 }
 
@@ -255,6 +307,8 @@ async function load(password){
   const k=await deriveKey(password,salt,box.n);
   const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:bytes(box.i)},k,bytes(box.c));
   data=JSON.parse(new TextDecoder().decode(plain));lastText=text;
+  // Datos del tablero de una sola marca: se muestran como Twins.
+  if(!data.brands)data={order:["twins"],brands:{twins:{...data,id:"twins",name:"Twins & Icons"}},general:null};
   return true;
 }
 async function enter(password){
@@ -273,10 +327,11 @@ document.getElementById("login").addEventListener("submit",async(e)=>{
   catch(x){err.textContent=x.message==="sin-datos"?"Todavía no hay datos publicados.":"Contraseña incorrecta."}
 });
 document.addEventListener("click",(e)=>{
-  const b=e.target.closest("button[data-v]");
-  if(!b)return;
-  view=b.dataset.v;history.replaceState(null,"",view==="cierre"?"#cierre":"#vivo");render();
+  const v=e.target.closest("button[data-v]"),b=e.target.closest("button[data-b]");
+  if(v)go(brand,v.dataset.v);
+  else if(b)go(b.dataset.b,b.dataset.b==="general"?"vivo":view);
 });
+addEventListener("hashchange",()=>{({brand,view}=route());render()});
 try{const saved=sessionStorage.getItem("bf-pw");if(saved)enter(saved).catch(()=>{})}catch{}
 </script>
 </body>

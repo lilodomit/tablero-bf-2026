@@ -5,3 +5,6 @@ site/data.enc
 tools/build-plan.py
 README.md
 tools/publicar-primera-vez.sh
+plan-*.json
+tools/agregar-nook.sh
+tools/build-nook.mjs

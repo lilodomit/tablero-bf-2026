@@ -36,8 +36,28 @@ jobs:
           KLAVIYO_PRIVATE_KEY: ${{ secrets.KLAVIYO_PRIVATE_KEY }}
           SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
           SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          NOOK_SHOPIFY_CLIENT_ID: ${{ secrets.NOOK_SHOPIFY_CLIENT_ID }}
+          NOOK_SHOPIFY_CLIENT_SECRET: ${{ secrets.NOOK_SHOPIFY_CLIENT_SECRET }}
+          NOOK_KLAVIYO_PRIVATE_KEY: ${{ secrets.NOOK_KLAVIYO_PRIVATE_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site
       - id: deploy
         uses: actions/deploy-pages@v4
+
+  # El horario de GitHub (cron) se atrasa o no corre: cada corrida programa la siguiente al próximo múltiplo de 5 min.
+  # El cron queda de respaldo para reiniciar la cadena; la concurrencia evita corridas duplicadas.
+  next:
+    needs: publish
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    permissions:
+      actions: write
+    steps:
+      - name: Programar la siguiente corrida
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          sleep $(( 300 - $(date +%s) % 300 ))
+          gh workflow run update.yml --repo "$GITHUB_REPOSITORY" --ref main

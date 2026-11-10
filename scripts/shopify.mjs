@@ -1,4 +1,4 @@
-// Lee las órdenes directo de la API de Shopify, con la app de la tienda de Twins.
+// Lee las órdenes directo de la API de Shopify, con la app de cada marca.
 // No depende de ningún MCP ni de Windsor: la tienda queda fija en plan.shop.
 import { mexicoNow } from "./compute.mjs";
 
@@ -7,11 +7,12 @@ const MAX_RETRIES = 6;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const money = (set) => Number(set?.shopMoney?.amount ?? 0);
 
-const ORDERS_QUERY = `query($cursor: String, $filter: String!) {
+// customerHistory: la app puede leer clientes (Nook). Sirve cuando Shopify no trae el índice de compra del cliente.
+const ordersQuery = (customerHistory) => `query($cursor: String, $filter: String!) {
   orders(first: 250, after: $cursor, sortKey: CREATED_AT, query: $filter) {
     pageInfo { hasNextPage endCursor }
     nodes {
-      name createdAt cancelledAt
+      id name createdAt cancelledAt paymentGatewayNames
       app { name }
       channelInformation { channelDefinition { channelName } }
       totalPriceSet { shopMoney { amount } }
@@ -21,6 +22,7 @@ const ORDERS_QUERY = `query($cursor: String, $filter: String!) {
       currentSubtotalPriceSet { shopMoney { amount } }
       shippingLines(first: 5) { nodes { taxLines { priceSet { shopMoney { amount } } } } }
       customerJourneySummary { customerOrderIndex }
+      ${customerHistory ? "customer { orders(first: 1, sortKey: CREATED_AT) { nodes { id } } }" : ""}
       lineItems(first: 50) {
         nodes {
           title variantTitle quantity currentQuantity
@@ -41,12 +43,12 @@ async function accessToken(shop, clientId, clientSecret) {
   return (await response.json()).access_token;
 }
 
-async function graphql(shop, token, variables) {
+async function graphql(shop, token, query, variables) {
   for (let attempt = 0; attempt < MAX_RETRIES; attempt += 1) {
     const response = await fetch(`https://${shop}/admin/api/${API_VERSION}/graphql.json`, {
       method: "POST",
       headers: { "content-type": "application/json", "X-Shopify-Access-Token": token },
-      body: JSON.stringify({ query: ORDERS_QUERY, variables }),
+      body: JSON.stringify({ query, variables }),
     });
     if (response.status === 429 || response.status >= 500) {
       await sleep(2000 * (attempt + 1));
@@ -64,16 +66,34 @@ async function graphql(shop, token, variables) {
   throw new Error("Shopify siguió saturado después de varios intentos");
 }
 
-async function allOrders(shop, token, from) {
+async function allOrders(shop, token, from, customerHistory) {
+  const query = ordersQuery(customerHistory);
   const filter = `created_at:>='${from}T00:00:00-06:00'`;
   const orders = [];
   let cursor = null;
   do {
-    const page = await graphql(shop, token, { cursor, filter });
+    const page = await graphql(shop, token, query, { cursor, filter });
     orders.push(...page.nodes);
     cursor = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (cursor);
   return orders;
+}
+
+// Costos como los configura Triple Whale: pasarela por nombre, fulfillment % de la venta, envío = lo cobrado.
+function tripleWhaleCosts(order, row, costs) {
+  if (!costs) return null;
+  const gateways = (order.paymentGatewayNames ?? []).join(" ");
+  const rule = costs.gateways.find((g) => new RegExp(g.match, "i").test(gateways));
+  const gateway = (rule ? rule.pct * row.total : 0) + costs.fee;
+  return row.cogs + row.tax + row.shipping + gateway + costs.fulfillment * row.total;
+}
+
+function customerIndex(order) {
+  const index = order.customerJourneySummary?.customerOrderIndex;
+  if (index != null) return index;
+  const first = order.customer?.orders?.nodes?.[0]?.id;
+  // Sin índice ni historial, la orden no cuenta como nueva (el índice tarda minutos en llegar).
+  return first ? (first === order.id ? 1 : 2) : null;
 }
 
 function toRow(order) {
@@ -83,9 +103,9 @@ function toRow(order) {
   return {
     date: local.date,
     stamp: `${local.date}T${String(local.hour).padStart(2, "0")}:${String(local.minute).padStart(2, "0")}:00-0600`,
+    // Cubbo Engage no trae canal, solo app.
     channel: order.channelInformation?.channelDefinition?.channelName ?? order.app?.name ?? "Otro",
-    // Cubbo Engage no trae canal, solo app. El índice tarda minutos en llegar; mientras, la orden no cuenta como nueva.
-    customerIndex: order.customerJourneySummary?.customerOrderIndex ?? null,
+    customerIndex: customerIndex(order),
     total: money(order.totalPriceSet),
     currentTotal: money(order.currentTotalPriceSet),
     tax: money(order.currentTotalTaxSet),
@@ -101,7 +121,7 @@ export async function loadShopify(plan, generatedAt, { clientId, clientSecret })
   const today = mexicoNow(generatedAt).date;
   const yesterday = new Date(Date.parse(`${today}T12:00:00Z`) - 86400000).toISOString().slice(0, 10);
   // Las canceladas no son venta.
-  const orders = (await allOrders(plan.shop, token, "2026-11-01")).filter((order) => !order.cancelledAt);
+  const orders = (await allOrders(plan.shop, token, "2026-11-01", plan.customerHistory)).filter((order) => !order.cancelledAt);
 
   const daily = [];
   const recent = [];
@@ -121,6 +141,7 @@ export async function loadShopify(plan, generatedAt, { clientId, clientSecret })
       order_current_shipping_price: row.shipping,
       order_cost_of_goods_sold: row.cogs,
       order_quantity: row.quantity,
+      tw_costs: tripleWhaleCosts(order, row, plan.costs),
     });
     if (row.date >= yesterday) {
       recent.push({ order_id: order.name, order_created_at: row.stamp, order_sales_channel: row.channel, order_quantity: row.quantity, order_total_price_amount: row.total });
