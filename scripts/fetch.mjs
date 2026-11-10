@@ -109,6 +109,8 @@ async function main() {
   if (!SHOPIFY_ID || !SHOPIFY_SECRET) throw new Error("Faltan SHOPIFY_CLIENT_ID o SHOPIFY_CLIENT_SECRET");
   const previous = await previousSnapshot();
   const raw = { generatedAt, ...(await loadRaw(plan, generatedAt)) };
+  // Sin gasto real la regla de Meta diría algo falso: mejor falla y queda el último dato bueno.
+  if (!raw.meta.length) throw new Error("Windsor no regresó datos de Meta");
   const minute = new Date(generatedAt).getUTCMinutes();
   const klaviyoDue = minute % 30 < 5 || !previous?.rawKlaviyo;
   raw.klaviyo = previous?.rawKlaviyo ?? null;
@@ -125,7 +127,8 @@ async function main() {
 
   const output = { ...compute(raw, plan), rawKlaviyo: raw.klaviyo };
   await writeFile(path.join(ROOT, "site", "data.enc"), await seal(output, PASSWORD));
-  console.log(`OK ${output.today} ${output.now.hour}:${output.now.minute} · venta hoy ${Math.round(output.day.real)}`);
+  // El registro de Actions es público: aquí nunca van montos.
+  console.log(`OK ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
   return output;
 }
 
