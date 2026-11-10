@@ -112,12 +112,12 @@ function decide(history, obj) {
     return { action: "bajar", reason: `Dos días seguidos abajo del objetivo (${ncText}). Regresar al nivel anterior.` };
   }
   if (last.nc >= obj && last.mer >= 5) {
-    return { action: "subir", reason: `${ncText}, con MER ${last.mer.toFixed(1)}x. Subir al nivel para escalar.` };
+    return { action: "subir", reason: `${ncText}, con MER de ${Math.round(100 / last.mer)}% (gasto ÷ venta). Subir al nivel para escalar.` };
   }
   if (last.nc < obj) {
     return { action: "mantener", reason: `${ncText}. Un segundo día abajo activa la regla de bajar.` };
   }
-  return { action: "mantener", reason: `${ncText}, pero el MER (${last.mer.toFixed(1)}x) no llega a 5x para escalar.` };
+  return { action: "mantener", reason: `${ncText}, pero el MER (${Math.round(100 / last.mer)}% de gasto sobre la venta) está arriba del 20% que pide la regla para escalar.` };
 }
 
 function stockTable(lines, stock, elapsedDays) {
