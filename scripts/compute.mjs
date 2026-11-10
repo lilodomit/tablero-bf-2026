@@ -49,8 +49,9 @@ export function aggregateDaily(rows) {
   return days;
 }
 
+// Receta de Sofía corregida el 9 nov: el envío ya trae IVA, así que se parte de la base sin IVA (totales − impuestos).
 function contribution(f, recipe) {
-  return f.net + f.ship - f.cogs - recipe.gateway * f.tot - recipe.fixed * f.n - recipe.returns * f.net;
+  return f.tot - f.tax - f.cogs - recipe.gateway * f.tot - recipe.fixed * f.n - recipe.returns * f.net;
 }
 
 function thresholds(days, plan, today) {
@@ -65,7 +66,7 @@ function thresholds(days, plan, today) {
   const piso = base / contrib;
   const target = contrib - plan.recipe.margin * f.net;
   if (piso < 1.3 || piso > 2.2 || target <= 0) return { ...fallback, source: "revisar" };
-  return { piso, obj: base / target, cacMax: target / f.n, source: "promo", orders: f.n };
+  return { piso, obj: base / target, cacMax: target / f.n, cacBreakeven: contrib / f.n, source: "promo", orders: f.n };
 }
 
 function metrics(day, spend, recipe) {
@@ -142,6 +143,14 @@ function klaviyoFor(klaviyo, date) {
   const campaigns = sends.reduce((sum, c) => sum + c.revenue, 0);
   const flows = n(klaviyo.flowsByDate[date]);
   return { campaigns, flows, total: campaigns + flows };
+}
+
+function topFlows(klaviyo, today, yesterday) {
+  return (klaviyo?.flows ?? [])
+    .map((f) => ({ name: f.name, today: n(f.byDate[today]), yesterday: n(f.byDate[yesterday]) }))
+    .filter((f) => f.today || f.yesterday)
+    .sort((a, b) => b.today - a.today || b.yesterday - a.yesterday)
+    .slice(0, 6);
 }
 
 export function compute(raw, plan) {
@@ -285,6 +294,8 @@ export function compute(raw, plan) {
     month: { mtd, before, expected: before + expectedPromo, projection, ratio, faltan: plan.goal - mtd },
     day: {
       plan: todayPlan, real: todayDay.total, expected: todayExpected,
+      // Cierre del día al ritmo actual, según la curva por hora. Antes del 10% del día es puro ruido.
+      projection: frac >= 0.1 ? todayDay.total / frac : null,
       lySoFar, lyTotal: todayPlan?.lyTotal ?? null,
       pace: paceDay,
     },
@@ -324,6 +335,7 @@ export function compute(raw, plan) {
       today: klaviyoFor(raw.klaviyo, today),
       yesterday: klaviyoFor(raw.klaviyo, yesterday),
       sends: raw.klaviyo.campaigns.filter((c) => c.local >= yesterday).sort((a, b) => (a.send < b.send ? 1 : -1)).slice(0, 6),
+      flows: topFlows(raw.klaviyo, today, yesterday),
     } : null,
     stock,
     calendar: plan.days.map((d) => ({ date: d.d, goal: d.total, real: d.d <= today ? days[d.d]?.total ?? 0 : null, today: d.d === today })),
