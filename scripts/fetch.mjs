@@ -20,24 +20,35 @@ const keysFor = (id) => Object.fromEntries(Object.entries(KEYS[id]).map(([k, nam
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Windsor vuelve a pedirle a Meta los últimos 3 días solo cada 6 h si no se le dice otra cosa: por eso el gasto
+// de hoy llegaba con horas de atraso. Se pide lo más seguido que permita el plan; si no lo acepta, se baja un escalón.
+const REFRESH_STEPS = ["15min", "1h", null];
+let refreshUsed;
+
 async function windsor(connector, account, accountName, fields, from, to) {
-  const query = (withAccount) => {
+  const query = (withAccount, refresh) => {
     const params = new URLSearchParams({ api_key: WINDSOR, fields: ["account_name", ...fields].join(",") });
     if (from) params.set("date_from", from);
     if (to) params.set("date_to", to);
     if (withAccount) params.set("select_accounts", `${connector}__${account}`);
+    if (refresh) params.set("refresh_interval", refresh);
     return `https://connectors.windsor.ai/${connector}?${params}`;
   };
-  for (const withAccount of [true, false]) {
-    const response = await fetch(query(withAccount));
-    if (!response.ok) {
-      if (withAccount) continue;
-      throw new Error(`Windsor ${connector} respondió ${response.status}`);
+  let failure = "sin respuesta";
+  for (const refresh of refreshUsed !== undefined ? [refreshUsed] : REFRESH_STEPS) {
+    for (const withAccount of [true, false]) {
+      const response = await fetch(query(withAccount, refresh));
+      const body = response.ok ? await response.json().catch(() => null) : null;
+      if (!body || (!body.data && body.error)) {
+        failure = response.ok ? "respuesta sin datos" : `respondió ${response.status}`;
+        continue;
+      }
+      refreshUsed ??= refresh;
+      const rows = (body.data ?? []).filter((row) => row.account_name === accountName);
+      if (rows.length || !withAccount) return rows;
     }
-    const rows = ((await response.json()).data ?? []).filter((row) => row.account_name === accountName);
-    if (rows.length || !withAccount) return rows;
   }
-  return [];
+  throw new Error(`Windsor ${connector} ${failure}`);
 }
 
 export async function loadKlaviyo(plan, generatedAt, key) {
@@ -148,7 +159,7 @@ async function runBrand(plan, generatedAt, previous) {
   raw.metaTrack = last && last.spend === spend && last.date === raw.today ? last : { spend, date: raw.today, changedAt: generatedAt };
   const output = { ...compute(raw, plan), rawKlaviyo: raw.klaviyo };
   // El registro de Actions es público: aquí nunca van montos.
-  console.log(`OK ${plan.id} ${output.today} ${output.now.hour}:${output.now.minute} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · campañas ${raw.metaCampaigns.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
+  console.log(`OK ${plan.id} ${output.today} ${output.now.hour}:${output.now.minute} · Windsor cada ${refreshUsed ?? "6h"} · Meta ${raw.meta.length} días · anuncios ${raw.ads.length} · campañas ${raw.metaCampaigns.length} · Klaviyo ${raw.klaviyo ? "sí" : "no"}`);
   return output;
 }
 
