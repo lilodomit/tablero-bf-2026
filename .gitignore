@@ -1,0 +1,7 @@
+plan.json
+site/data.enc
+.env
+.DS_Store
+tools/build-plan.py
+README.md
+tools/publicar-primera-vez.sh

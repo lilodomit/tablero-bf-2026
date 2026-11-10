@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Buen Fin en vivo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F7F4EE;--ink:#231F20;--muted:#5F5A55;--line:#E4DFD6;--track:#EFEAE2;--card:#FFF;--goal:#E4DFD6;--mid:#8C857C;--pace:#E8A33D;--ly:#C26A12;--good:#1E6B45;--good-bg:#E3F0E8;--good-ink:#14532F;--warn-bg:#F6EAD3;--warn-ink:#5C3700;--bad:#A1271F;--bad-bg:#F5DEDB;--bad-ink:#7A1D17;--soft:#CFC8BD}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{color-scheme:light}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Montserrat,system-ui,sans-serif}
+h1,h2,p{margin:0}
+.wrap{max-width:1360px;margin:0 auto;padding:32px 24px 64px;display:flex;flex-direction:column;gap:20px}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:16px}
+.kicker{font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+h1{font-size:32px;font-weight:800;letter-spacing:-.01em;margin-top:6px}
+h2{font-size:20px;font-weight:800}
+.sub{font-size:13px;color:var(--muted);margin-top:6px}
+.stale{color:var(--bad);font-weight:700}
+nav{display:flex;flex-wrap:wrap;gap:8px}
+nav button{font:inherit;font-size:14px;font-weight:600;min-height:44px;padding:0 18px;border-radius:999px;border:1px solid #DCD6CC;background:var(--card);color:var(--ink);cursor:pointer}
+nav button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.alerts{display:flex;flex-wrap:wrap;gap:10px}
+.alert{display:flex;gap:8px;align-items:center;padding:10px 14px;border-radius:12px;font-size:14px}
+.alert b{font-weight:700}
+.warn{background:var(--warn-bg);color:var(--warn-ink)}.bad{background:var(--bad-bg);color:var(--bad-ink)}.good{background:var(--good-bg);color:var(--good-ink)}.neutral{background:var(--track);color:#3D3835}
+.grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));gap:16px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:24px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.card.pace{gap:10px}
+.dark{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.dark .lab,.dark .note{color:var(--soft)}
+.lab{font-size:13px;font-weight:600;color:var(--muted)}
+.big{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+.note{font-size:14px;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
+.bar{height:10px;border-radius:999px;background:var(--track);position:relative;overflow:hidden}
+.dark .bar{background:#4A4440}
+.bar>i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);border-radius:999px}
+.dark .bar>i{background:var(--bg)}
+.bar>u{position:absolute;top:0;bottom:0;width:2px;background:var(--pace)}
+.bar.t{height:14px}.bar.m{height:12px}
+.pill{font-size:13px;font-weight:700;padding:4px 10px;border-radius:999px;display:inline-block}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.spread{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:12px}
+.scen{display:flex;gap:4px}
+.scen div{flex:1;text-align:center;font-size:12px;font-weight:700;padding:6px 0;border-radius:6px;background:var(--track);color:var(--muted)}
+.scen div.on{background:var(--ink);color:var(--bg)}
+.action{display:flex;align-items:center;gap:10px;border-radius:12px;padding:10px 16px;font-size:15px;flex-wrap:wrap}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),1fr));gap:12px}
+.kpi{background:var(--bg);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:4px}
+.kpi .lab{font-size:12px}
+.kpi b{font-size:26px;font-weight:800;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.chart{position:relative;height:200px;border-bottom:1px solid #DCD6CC}
+.rule{position:absolute;left:0;right:0;border-top:2px dashed}
+.rule span{position:absolute;right:0;top:-9px;font-size:11px;font-weight:700;background:var(--card);padding:0 4px}
+.bars{position:absolute;inset:0;display:flex;align-items:flex-end;gap:10px;padding:0 140px 0 8px}
+.bars>div{flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;font-size:11px;font-weight:700}
+.bars>div i{display:block;width:100%;max-width:44px;border-radius:6px 6px 0 0}
+.labels{display:flex;gap:10px;padding:0 140px 0 8px}
+.labels div{flex:1;text-align:center;font-size:11px;color:var(--muted)}
+.prog{display:flex;flex-direction:column;gap:6px}
+.prog .spread{font-size:13px;flex-wrap:nowrap}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{text-align:left;color:var(--muted);padding:6px 0;font-weight:600}
+td{padding:8px 8px 8px 0;border-top:1px solid var(--track);font-variant-numeric:tabular-nums}
+.r{text-align:right;padding-right:0;padding-left:12px;white-space:nowrap}
+.scroll{overflow-x:auto}
+.hours,.cal{display:flex;align-items:flex-end;position:relative}
+.hours{height:220px;gap:4px}.cal{height:200px;gap:6px}
+.hours>div,.cal>div{flex:1;height:100%;position:relative}
+.hours i,.cal i{position:absolute;bottom:0;border-radius:4px 4px 0 0}
+.goalbar{left:0;right:0;background:var(--goal)}
+.realbar{left:18%;right:18%;background:var(--ink)}
+.realbar.now{background:var(--mid)}
+.axis{display:flex}.axis div{flex:1;text-align:center;font-size:10px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:16px;font-size:12px;color:var(--muted)}
+.legend span{display:flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:3px;display:block}
+.line{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:6px 0;border-top:1px solid var(--track)}
+.line span{color:var(--muted)}
+.mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+@media(max-width:560px){.mini{grid-template-columns:1fr}.bars,.labels{padding-right:96px;gap:4px}h1{font-size:26px}.big{font-size:38px}}
+.phases{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(200px,100%),1fr));gap:10px}
+.phase{border-radius:12px;padding:12px 14px;background:var(--bg)}
+.phase.on{background:var(--ink);color:var(--bg)}
+.phase b{display:block;font-size:18px;font-weight:800}
+.phase small{font-size:12px;display:block}
+.decision{background:var(--ink);color:var(--bg);border-radius:16px;padding:28px;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:20px}
+.decision h2{font-size:30px;letter-spacing:-.01em}
+.stat{background:#3A3431;border-radius:12px;padding:14px 18px;min-width:140px}
+.stat b{font-size:28px;font-weight:800;display:block}
+#gate{min-height:100vh;display:grid;place-items:center;padding:24px}
+#gate form{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:32px;display:flex;flex-direction:column;gap:14px;width:min(380px,100%)}
+#gate label{font-size:14px;font-weight:600}
+#gate input{font:inherit;min-height:44px;padding:0 12px;border:1px solid #DCD6CC;border-radius:10px}
+#gate button{font:inherit;font-weight:700;min-height:44px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);cursor:pointer}
+#err{font-size:13px;color:var(--bad);min-height:18px}
+</style>
+</head>
+<body>
+<main id="gate">
+<form id="login">
+<div class="kicker">Twins &amp; Icons</div>
+<h1>Buen Fin 2026</h1>
+<label for="pw">Contraseña</label>
+<input id="pw" type="password" autocomplete="current-password" required>
+<button type="submit">Entrar</button>
+<div id="err" role="alert"></div>
+</form>
+</main>
+<main id="app" hidden></main>
+<script>
+const DAYS=["Dom","Lun","Mar","Mié","Jue","Vie","Sáb"];
+const M=(v)=>{if(v===null||v===undefined||Number.isNaN(v))return"—";const a=Math.abs(v);if(a>=1e6)return"$"+(v/1e6).toFixed(2)+"M";if(a>=1e4)return"$"+Math.round(v/1e3)+"k";return"$"+Math.round(v).toLocaleString("en-US")};
+const X=(v,d=2)=>v===null||v===undefined?"—":v.toFixed(d)+"x";
+const P=(v,d=0)=>v===null||v===undefined?"—":(v*100).toFixed(d)+"%";
+const esc=(t)=>String(t??"").replace(/[&<>"']/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const clamp=(v)=>Math.max(0,Math.min(100,v));
+const dayLabel=(iso)=>{const d=new Date(iso+"T12:00:00Z");return DAYS[d.getUTCDay()]+" "+d.getUTCDate()+" nov"};
+const paceClass=(p)=>p===null?"neutral":p>=1?"good":p>=.9?"warn":"bad";
+const clock=(iso)=>iso?new Date(iso).toLocaleTimeString("es-MX",{timeZone:"America/Mexico_City",hour:"2-digit",minute:"2-digit",hour12:false}):"—";
+const prog=(label,value,pct,marker)=>`<div class="prog"><div class="spread"><span>${label}</span><strong>${value}</strong></div><div class="bar t"><i style="width:${clamp(pct*100)}%"></i>${marker!==undefined?`<u style="left:${clamp(marker*100)}%"></u>`:""}</div></div>`;
+const kpi=(l,v,s)=>`<div class="kpi"><div class="lab">${l}</div><b>${v}</b><div class="small">${s}</div></div>`;
+
+let data=null,view=location.hash==="#cierre"?"cierre":"vivo",key=null,lastText="";
+
+function head(d){
+  const title=view==="vivo"?`${dayLabel(d.today)} · ${d.phase?d.phase.name:"Noviembre"}`:(d.close?`Cierre del ${dayLabel(d.close.date)}`:"Cierre de ayer");
+  const age=Math.round((Date.now()-Date.parse(d.generatedAt))/60000);
+  const stale=age>20?`<span class="stale"> · Sin actualizar hace ${age} min</span>`:"";
+  return `<header><div><div class="kicker">Twins &amp; Icons · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button></nav></header>`;
+}
+
+function live(d){
+  const m=d.month,day=d.day,meta=d.meta,limits=d.limits,monthPct=m.mtd/d.goal,mark=m.expected/d.goal,monthPace=m.expected?m.mtd/m.expected:null;
+  const scen=[12,14,15,16,18,20],pick=scen.reduce((a,b)=>Math.abs(b*1e6-m.projection)<Math.abs(a*1e6-m.projection)?b:a);
+  const alerts=d.alerts.length?d.alerts.map(a=>`<div class="alert ${a.level}"><b>${esc(a.tag)}</b><span>${esc(a.text)}</span></div>`).join(""):`<div class="alert good"><b>Sin alertas</b><span>Todo dentro del plan a esta hora</span></div>`;
+  const lyCmp=day.lySoFar&&day.lySoFar>0?`<span class="small">vs misma fecha 2025 a esta hora: ${day.real>=day.lySoFar?"+":""}${Math.round((day.real/day.lySoFar-1)*100)}%</span>`:"";
+  const actionClass={subir:"good",mantener:"warn",bajar:"bad"}[d.decision.action];
+  const hist=meta.history,top=Math.max(4,...hist.map(h=>(h.nc||0)*1.15),limits.obj*1.2);
+  const bars=hist.map(h=>`<div>${h.nc===null?"—":h.nc.toFixed(1)+"x"}<i style="height:${((h.nc||0)/top*100*.86).toFixed(1)}%;background:${h.today?"var(--mid)":h.nc>=limits.obj?"var(--good)":h.nc>=limits.piso?"var(--ink)":"var(--bad)"}"></i></div>`).join("");
+  const labels=hist.map(h=>`<div>${Number(h.date.slice(8))}${h.today?" hoy":""}</div>`).join("");
+  const rule=(v,c,t)=>`<div class="rule" style="bottom:${(v/top*100*.86).toFixed(1)}%;border-color:${c}"><span style="color:${c}">${t}</span></div>`;
+  const ads=meta.ads.map(a=>`<tr><td>${esc(a.name)}</td><td class="r">${M(a.spend)}</td><td class="r">${X(a.roas,1)}</td><td class="r">${M(a.cpa)}</td></tr>`).join("")||`<tr><td colspan="4">Sin gasto registrado hoy</td></tr>`;
+  const hm=Math.max(...d.hours.goal,...d.hours.real,...(d.hours.ly||[0]))||1;
+  const hours=d.hours.goal.map((g,i)=>{const r=d.hours.real[i];return `<div><i class="goalbar" style="height:${(g/hm*92).toFixed(1)}%"></i>${i<=d.hours.nowHour?`<i class="realbar${i===d.hours.nowHour?" now":""}" style="height:${(r/hm*92).toFixed(1)}%"></i>`:""}</div>`}).join("");
+  const lyPath=d.hours.ly?"M"+d.hours.ly.map((v,i)=>`${((i+.5)*10).toFixed(1)},${(100-v/hm*92).toFixed(1)}`).join(" L"):"";
+  const axis=d.hours.goal.map((_,i)=>`<div>${i%3===0?i+"h":""}</div>`).join("");
+  const channels=d.channels.map(c=>`<div class="prog"><div class="spread" style="font-size:14px;align-items:baseline"><strong>${c.label}</strong><span>${M(c.value)} <span style="color:var(--muted)">de ${M(c.goal)}</span></span></div><div class="bar m"><i style="width:${clamp(c.goal?c.value/c.goal*100:0)}%"></i><u style="left:${clamp(d.frac*100)}%"></u></div><div class="small">${c.goal?P(c.value/c.goal):"—"} de la meta del día · ${P(c.share)} de la venta</div></div>`).join("");
+  const aovDelta=d.ticket.aov?d.ticket.aov/d.ticket.base-1:null;
+  const k=d.klaviyo;
+  const sends=k?(k.sends.map(s=>`<tr><td>${esc(s.name)}</td><td>${s.hour?String(s.hour.hour).padStart(2,"0")+":"+String(s.hour.minute).padStart(2,"0"):"—"}</td><td class="r">${M(s.revenue)}</td><td class="r">${s.recipients?"$"+(s.revenue/s.recipients).toFixed(2):"—"}</td></tr>`).join("")||`<tr><td colspan="4">Sin envíos desde ayer</td></tr>`):`<tr><td colspan="4">Klaviyo sin dato todavía</td></tr>`;
+  const stock=d.stock.map(s=>`<tr><td>${esc(s.name)}</td><td class="r">${s.units.toLocaleString("en-US")}</td><td class="r">${s.inventory===null?"—":s.inventory.toLocaleString("en-US")}</td><td class="r">${s.days===null?"—":`<span${s.days<3?' class="pill bad"':""}>${s.days.toFixed(1)}</span>`}</td></tr>`).join("");
+  const cm=Math.max(...d.calendar.map(c=>Math.max(c.goal,c.real||0)))||1;
+  const cal=d.calendar.map(c=>`<div><i class="goalbar" style="height:${(c.goal/cm*100).toFixed(1)}%"></i>${c.real!==null?`<i class="realbar${c.today?" now":""}" style="left:20%;right:20%;height:${(c.real/cm*100).toFixed(1)}%"></i>`:""}</div>`).join("");
+  const calAxis=d.calendar.map(c=>`<div>${Number(c.date.slice(8))}</div>`).join("");
+  const phases=d.phases.map(p=>`<div class="phase${p.active?" on":""}"><small style="font-weight:700">${p.name} · ${p.label}</small><b>${p.real===null?"—":M(p.real)}</b><small>meta ${M(p.total)}${p.real!==null?" · "+P(p.real/p.total):""}</small></div>`).join("");
+  const metaToday=meta.today;
+  return head(d)+`
+<section class="alerts" aria-label="Alertas">${alerts}</section>
+<section class="grid4" aria-label="Pacing">
+<div class="card pace dark"><div class="lab">Noviembre vs meta</div><div class="big">${M(m.mtd)}</div><div class="note">de ${M(d.goal)} · faltan ${M(m.faltan)}</div><div class="bar"><i style="width:${clamp(monthPct*100)}%"></i><u style="left:${clamp(mark*100)}%"></u></div><div class="note" style="font-size:13px">Deberíamos ir en ${M(m.expected)} (línea naranja) · <strong style="color:#F2C27A">${P(monthPace)} del pacing</strong></div></div>
+<div class="card pace"><div class="lab">Hoy vs meta del día</div><div class="big">${M(day.real)}</div><div class="note">Meta del día ${M(day.plan?.total)} · a esta hora ${M(day.expected)}</div><div class="row"><span class="pill ${paceClass(day.pace)}">${P(day.pace)} del pacing</span>${lyCmp}</div></div>
+<div class="card pace"><div class="lab">${d.phase?`Fase ${d.phase.name} (${d.phase.label} nov)`:"Fase"}</div><div class="big">${M(d.phase?.real)}</div><div class="note">de ${M(d.phase?.total)} · Ecomm ${M(d.phase?.ecommReal)} de ${M(d.phase?.ecomm)}</div><div class="bar"><i style="width:${clamp(d.phase?d.phase.real/d.phase.total*100:0)}%"></i></div></div>
+<div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(m.projection)}</div><div class="note">Al ritmo actual · ${P(m.ratio)} del plan</div><div class="scen" aria-label="Escenarios">${scen.map(s=>`<div class="${s===pick?"on":""}">${s}M</div>`).join("")}</div></div>
+</section>
+<section class="card" aria-label="Meta Ads" style="gap:20px">
+<div class="spread"><h2>Meta · ¿subo, mantengo o bajo?</h2><div class="action ${actionClass}"><strong>Acción: ${d.decision.action}</strong><span>${esc(d.decision.reason)}</span></div></div>
+<div class="kpis">
+${kpi("Gasto hoy",M(metaToday.spend),`Plan $15M ${M(metaToday.plan15)} · nivel $20M ${M(metaToday.plan20)}`)}
+${kpi("NC-ROAS hoy",X(metaToday.nc),`Objetivo 20%: ${X(limits.obj)} · piso ${X(limits.piso)}`)}
+${kpi("Margen clientes nuevos",P(metaToday.margin,1),"Después de Meta · objetivo 20%")}
+${kpi("MER web hoy",X(metaToday.mer),"Venta ecomm ÷ gasto Meta")}
+${kpi("CAC cliente nuevo",M(metaToday.cac),`Máximo al 20%: ${M(limits.cacMax)}`)}
+${kpi("CPM · frecuencia",`$${Math.round(metaToday.cpm)} · ${metaToday.frequency.toFixed(1)}`,`Oct: $${Math.round(meta.oct.cpm)} · ${meta.oct.frequency.toFixed(1)}`)}
+</div>
+<div class="grid3" style="gap:24px">
+<div style="display:flex;flex-direction:column;gap:10px;min-width:0"><div style="font-size:14px;font-weight:700">NC-ROAS diario contra el objetivo de 20%</div><div class="chart">${rule(limits.obj,"var(--good)",X(limits.obj)+" · objetivo 20%")}${rule(limits.piso,"var(--bad)",X(limits.piso)+" · piso")}<div class="bars">${bars}</div></div><div class="labels">${labels}</div><div class="small">Objetivo y piso se recalculan con el acumulado de la promo, con la receta del motor de ROAS. Dos días seguidos abajo del objetivo: regresar al nivel anterior. Arriba del objetivo con MER de 5x o más: subir al nivel de $20M.</div></div>
+<div style="display:flex;flex-direction:column;gap:12px;min-width:0"><div style="font-size:14px;font-weight:700">Gasto acumulado 8–30 nov</div>${prog(`vs plan de $15M (${M(meta.cumulative.plan15)})`,`${M(meta.cumulative.spend)} · ${P(meta.cumulative.spend/meta.cumulative.plan15)}`,meta.cumulative.spend/meta.cumulative.plan15)}${prog(`vs tope aprobado ${M(meta.cumulative.cap)}`,P(meta.cumulative.spend/meta.cumulative.cap),meta.cumulative.spend/meta.cumulative.cap)}${prog(`Hoy vs plan $15M (${M(metaToday.plan15)})`,`${M(metaToday.spend)} · ${P(metaToday.plan15?metaToday.spend/metaToday.plan15:0)}`,metaToday.plan15?metaToday.spend/metaToday.plan15:0,d.frac)}<div class="small">Línea naranja: donde debería ir el gasto a esta hora</div><div style="font-size:14px;font-weight:700;margin-top:6px">Top ads de hoy por gasto</div><div class="scroll"><table><thead><tr><th>Anuncio</th><th class="r">Gasto</th><th class="r">ROAS Meta</th><th class="r">CPA</th></tr></thead><tbody>${ads}</tbody></table></div><div class="small">El ROAS de Meta solo sirve para comparar anuncios entre sí.</div></div>
+</div>
+</section>
+<section class="card" aria-label="Venta por hora">
+<div class="spread"><h2>Venta por hora · hoy</h2><div class="legend"><span><i style="background:var(--ink)"></i>Real 2026</span><span><i style="background:var(--goal)"></i>Meta por hora</span>${d.hours.ly?`<span><i style="background:var(--ly);height:2px;width:16px"></i>Misma fecha 2025</span>`:""}</div></div>
+<div class="hours">${hours}${d.hours.ly?`<svg viewBox="0 0 240 100" preserveAspectRatio="none" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible" aria-hidden="true"><path d="${lyPath}" fill="none" stroke="#C26A12" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>`:""}</div>
+<div class="axis">${axis}</div>
+</section>
+<section class="grid2">
+<div class="card"><h2>Canales · hoy vs meta del día</h2>${channels}<div style="border-top:1px solid var(--track);padding-top:14px" class="mini"><div><div class="small" style="font-weight:600">Cubbo Engage hoy</div><div style="font-size:18px;font-weight:800">${M(d.engage.today.revenue)}</div><div class="small">${d.engage.today.orders} órdenes · evento ${M(d.engage.event.revenue)}</div></div><div><div class="small" style="font-weight:600">Clientes nuevos</div><div style="font-size:18px;font-weight:800">${M(d.customers.fresh)}</div><div class="small">${P(d.customers.fresh/(d.customers.fresh+d.customers.returning||1))} de online</div></div><div><div class="small" style="font-weight:600">Órdenes online</div><div style="font-size:18px;font-weight:800">${d.customers.ordersOnline.toLocaleString("en-US")}</div><div class="small">Recurrentes ${M(d.customers.returning)}</div></div></div></div>
+<div class="card"><h2>Ticket · la palanca sin gasto</h2><div class="mini"><div class="kpi"><div class="lab">AOV ecomm</div><b>${M(d.ticket.aov)}</b><div class="small" style="color:${aovDelta!==null&&aovDelta<0?"var(--bad)":"var(--good)"};font-weight:600">${aovDelta===null?"—":(aovDelta>=0?"+":"")+Math.round(aovDelta*100)+"%"} vs base ${M(d.ticket.base)}</div></div><div class="kpi"><div class="lab">Piezas por orden</div><b>${d.ticket.pieces?d.ticket.pieces.toFixed(2):"—"}</b><div class="small">Órdenes online</div></div><div class="kpi"><div class="lab">Órdenes con 3+ piezas</div><b>${P(d.ticket.kit.share)}</b><div class="small">${d.ticket.kit.orders} órdenes</div></div></div>
+<div class="card dark" style="padding:16px;gap:6px;border-radius:12px"><div class="lab" style="font-size:12px">ROAS objetivo para 20% de margen · sobre clientes nuevos, sin IVA</div><div class="row" style="align-items:baseline;gap:14px"><span style="font-size:30px;font-weight:800">${X(limits.obj)}</span><span class="note">piso ${X(limits.piso)} · CAC máximo ${M(limits.cacMax)}</span></div><div class="note" style="font-size:13px">${limits.source==="promo"?`Acumulado de la promo · ${limits.orders} órdenes de clientes nuevos`:limits.source==="revisar"?"El cálculo salió fuera de rango: se muestra el último valor validado":"Último valor validado, en lo que cierra el primer día"}</div></div></div>
+</section>
+<section class="grid2">
+<div class="card"><h2>Base propia · email y Cubbo Engage</h2><div class="mini" style="grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr))"><div class="kpi"><div class="lab">Klaviyo hoy</div><b>${M(k?.today?.total)}</b><div class="small">Campañas ${M(k?.today?.campaigns)} · flows ${M(k?.today?.flows)}</div></div><div class="kpi"><div class="lab">Cubbo Engage hoy</div><b>${M(d.engage.today.revenue)}</b><div class="small">${d.engage.today.orders} órdenes · ayer ${M(d.engage.yesterday.revenue)}</div></div></div><div class="scroll"><table><thead><tr><th>Envío</th><th>Hora</th><th class="r">Revenue</th><th class="r">$/dest.</th></tr></thead><tbody>${sends}</tbody></table></div></div>
+<div class="card"><h2>Inventario de los que más venden</h2><div class="scroll"><table><thead><tr><th>Producto</th><th class="r">Vendidas en promo</th><th class="r">Inventario</th><th class="r">Días al ritmo actual</th></tr></thead><tbody>${stock}</tbody></table></div><div class="small">Rojo: menos de 3 días de inventario. Si Meta lo sigue empujando, hay que pausar esos ads.</div></div>
+</section>
+<section class="card" aria-label="Mes"><div class="spread"><h2>8–30 nov día por día · real vs meta</h2><div class="legend"><span><i style="background:var(--goal)"></i>Meta del día</span><span><i style="background:var(--ink)"></i>Real</span><span><i style="background:var(--mid)"></i>Hoy (en curso)</span></div></div><div class="cal">${cal}</div><div class="axis" style="gap:6px">${calAxis}</div><div class="phases">${phases}</div></section>`;
+}
+
+function closeView(d){
+  const c=d.close;
+  if(!c)return head(d)+`<section class="card"><h2>Todavía no hay un día cerrado del evento</h2></section>`;
+  const a=d.decision,m=c.meta,pl=c.plan,pct=(v,g)=>g?v/g:null;
+  const badge=(p)=>`<span class="pill ${paceClass(p)}">${P(p)}</span>`;
+  const chan=[["Ecomm",c.day.ecomm,pl.ecomm],["TikTok Shop",c.day.tiktok,pl.tiktok],["Isla Santa Fe",c.day.isla,pl.isla]].map(([n,v,g])=>`<tr><td>${n}</td><td class="r">${M(v)}</td><td class="r">${M(g)}</td><td class="r">${badge(pct(v,g))}</td><td class="r">${P(c.day.total?v/c.day.total:0)}</td></tr>`).join("")+`<tr><td>Cubbo Engage</td><td class="r">${M(c.day.engage)}</td><td class="r">—</td><td class="r">—</td><td class="r">${P(c.day.total?c.day.engage/c.day.total:0)}</td></tr><tr style="font-weight:700"><td style="border-top:2px solid var(--ink)">Total</td><td class="r" style="border-top:2px solid var(--ink)">${M(c.day.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${M(pl.total)}</td><td class="r" style="border-top:2px solid var(--ink)">${badge(pct(c.day.total,pl.total))}</td><td class="r" style="border-top:2px solid var(--ink)">100%</td></tr>`;
+  const ruleOf=(h,prev)=>{if(h.nc===null)return["—","neutral"];if(prev&&h.nc<d.limits.obj&&prev.nc<d.limits.obj)return["Bajar","bad"];if(h.nc>=d.limits.obj&&h.mer>=5)return["Subir","good"];return["Mantener","neutral"]};
+  const done=d.meta.history.filter(h=>!h.today);
+  const metaRows=done.map((h,i)=>{const[r,cl]=ruleOf(h,done[i-1]);return `<tr><td>${dayLabel(h.date)}</td><td class="r">${M(h.plan15)}</td><td class="r">${M(h.plan20)}</td><td class="r">${M(h.spend)}</td><td class="r" style="color:var(--muted)">${M(h.ly)}</td><td class="r" style="font-weight:700">${X(h.nc)}</td><td class="r">${X(h.mer,1)}</td><td class="r">${P(h.margin,1)}</td><td style="padding-left:16px"><span class="pill ${cl}">${r}</span></td></tr>`}).join("");
+  const todos=d.alerts.length?d.alerts.map(t=>`<div class="line" style="justify-content:flex-start"><span class="pill ${t.level}" style="color:inherit">${esc(t.tag)}</span><div>${esc(t.text)}</div></div>`).join(""):`<div class="small">Sin pendientes automáticos.</div>`;
+  const t=d.todayPlanCard;
+  const top=(l,v,s,b,cl)=>`<div class="card" style="gap:8px"><div class="lab">${l}</div><div class="big" style="font-size:36px">${v}</div><div class="note" style="font-size:13px">${s}</div><div><span class="pill ${cl}">${b}</span></div></div>`;
+  const ky=d.klaviyo?.yesterday;
+  return head(d)+`
+<section class="decision"><div style="flex:1 1 520px;display:flex;flex-direction:column;gap:8px"><div class="lab" style="color:var(--soft)">Decisión de Meta para hoy, según las reglas</div><h2 style="text-transform:capitalize">${a.action}</h2><div style="font-size:15px;color:var(--soft)">${esc(a.reason)} Presupuesto de hoy: ${M(t?.meta15)} (nivel $20M: ${M(t?.meta20)}).</div></div><div class="row" style="gap:12px"><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">NC-ROAS ayer</div><b>${X(m?.nc)}</b></div><div class="stat"><div class="lab" style="font-size:12px;color:var(--soft)">Margen nuevos</div><b style="color:#9FD8B5">${P(m?.margin,1)}</b></div></div></section>
+<section class="grid4">
+${top("Venta de ayer",M(c.day.total),`Meta del día ${M(pl.total)} · 2025: ${M(pl.lyTotal)}`,`${P(pct(c.day.total,pl.total))} de la meta`,paceClass(pct(c.day.total,pl.total)))}
+${top("Noviembre acumulado",M(c.mtd),`Deberíamos ir en ${M(c.mtdExpected)} de ${M(d.goal)}`,`${P(pct(c.mtd,c.mtdExpected))} del pacing`,paceClass(pct(c.mtd,c.mtdExpected)))}
+${top("Gasto Meta ayer",M(m?.spend),`Plan $15M ${M(m?.plan15)} · 2025: ${M(m?.ly)}`,`${P(m?pct(m.spend,m.plan15):null)} del plan`,"neutral")}
+${top("Proyección de mes",M(d.month.projection),`Meta ${M(d.goal)}`,`${d.month.projection>=d.goal?"+":"−"}${M(Math.abs(d.month.projection-d.goal))} vs meta`,d.month.projection>=d.goal?"good":"warn")}
+</section>
+<section class="card"><h2>Venta de ayer por canal</h2><div class="scroll"><table style="min-width:560px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Meta del día</th><th class="r">% de la meta</th><th class="r">% de la venta</th></tr></thead><tbody>${chan}</tbody></table></div></section>
+<section class="card"><div class="spread"><h2>Meta día por día · gasto, NC-ROAS y margen</h2><div class="small">Objetivo 20%: ${X(d.limits.obj)} · gasto acumulado ${M(d.meta.cumulative.spend)} de ${M(d.meta.cumulative.plan15)}</div></div><div class="scroll"><table style="min-width:820px;font-size:14px"><thead><tr><th>Día</th><th class="r">Plan $15M</th><th class="r">Nivel $20M</th><th class="r">Gasto real</th><th class="r">2025</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Margen</th><th style="padding-left:16px">Regla</th></tr></thead><tbody>${metaRows}</tbody></table></div></section>
+<section class="grid3">
+<div class="card"><h2 style="font-size:18px">Ecomm ayer</h2>${[["Órdenes",c.orders.toLocaleString("en-US")],["AOV · base "+M(d.ticket.base),M(c.aov)],["Piezas por orden",c.pieces?c.pieces.toFixed(2):"—"],["Órdenes con 3+ piezas",P(c.kit.share)],["Clientes nuevos (% venta)",P(c.freshShare)],["NC-ROAS",X(m?.nc)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
+<div class="card"><h2 style="font-size:18px">Base propia ayer</h2>${[["Klaviyo total",M(ky?.total)],["Campañas",M(ky?.campaigns)],["Flows",M(ky?.flows)],["Cubbo Engage",M(d.engage.yesterday.revenue)],["Órdenes Cubbo Engage",d.engage.yesterday.orders]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
+<div class="card"><h2 style="font-size:18px">Plan de hoy · ${dayLabel(d.today)}</h2>${[["Meta de venta",M(t?.total)],["Ecomm",M(t?.ecomm)],["Presupuesto Meta (plan $15M)",M(t?.meta15)],["Nivel $20M si se escala",M(t?.meta20)],["TikTok",M(t?.tiktok)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
+</section>
+<section class="card"><h2 style="font-size:18px">Para resolver en la junta</h2>${todos}</section>`;
+}
+
+function render(){
+  if(!data)return;
+  const app=document.getElementById("app"),y=scrollY;
+  app.innerHTML=`<div class="wrap">${view==="vivo"?live(data):closeView(data)}</div>`;
+  scrollTo(0,y);
+}
+
+async function deriveKey(password,salt,iterations){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(password),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["decrypt"]);
+}
+const bytes=(t)=>Uint8Array.from(atob(t),c=>c.charCodeAt(0));
+async function load(password){
+  const res=await fetch("data.enc?ts="+Date.now(),{cache:"no-store"});
+  if(!res.ok)throw new Error("sin-datos");
+  const text=await res.text();
+  if(text===lastText&&data)return false;
+  const box=JSON.parse(text),salt=bytes(box.s);
+  const k=await deriveKey(password,salt,box.n);
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv:bytes(box.i)},k,bytes(box.c));
+  data=JSON.parse(new TextDecoder().decode(plain));lastText=text;
+  return true;
+}
+async function enter(password){
+  await load(password);
+  key=password;
+  try{sessionStorage.setItem("bf-pw",password)}catch{}
+  document.getElementById("gate").hidden=true;
+  document.getElementById("app").hidden=false;
+  render();
+  setInterval(async()=>{try{if(await load(key))render();else render()}catch{}},60000);
+}
+document.getElementById("login").addEventListener("submit",async(e)=>{
+  e.preventDefault();
+  const err=document.getElementById("err");err.textContent="";
+  try{await enter(document.getElementById("pw").value)}
+  catch(x){err.textContent=x.message==="sin-datos"?"Todavía no hay datos publicados.":"Contraseña incorrecta."}
+});
+document.addEventListener("click",(e)=>{
+  const b=e.target.closest("button[data-v]");
+  if(!b)return;
+  view=b.dataset.v;history.replaceState(null,"",view==="cierre"?"#cierre":"#vivo");render();
+});
+try{const saved=sessionStorage.getItem("bf-pw");if(saved)enter(saved).catch(()=>{})}catch{}
+</script>
+</body>
+</html>
