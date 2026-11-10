@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Buen Fin en vivo</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -36,6 +38,7 @@ nav button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color
 .dark{background:var(--ink);color:var(--bg);border-color:var(--ink)}
 .dark .lab,.dark .note{color:var(--soft)}
 .lab{font-size:13px;font-weight:600;color:var(--muted)}
+.mix{height:12px;border-radius:6px;background:var(--soft);overflow:hidden;margin:12px 0 4px}.mix i{display:block;height:100%;background:var(--ink)}
 .big .amt{font-size:.55em;font-weight:700;margin-left:10px;color:var(--muted);letter-spacing:0;white-space:nowrap}
 .big{font-size:44px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
 .note{font-size:14px;color:var(--muted)}
@@ -164,6 +167,21 @@ function head(d){
   return `${brandNav()}<header><div><div class="kicker">${esc(d.name)} · ${view==="vivo"?"Buen Fin 2026":"Revisión de las 10 am"}</div><h1>${title}</h1><div class="sub">Shopify ${clock(d.generatedAt)} · Meta Ads sin cambio desde ${clock(d.meta.track?.changedAt)} · Klaviyo ${clock(d.klaviyo?.at)} · Montos con IVA${stale}</div></div><nav aria-label="Vista"><button data-v="vivo" aria-pressed="${view==="vivo"}">En vivo</button><button data-v="cierre" aria-pressed="${view==="cierre"}">Cierre de ayer</button><button data-v="fechas" aria-pressed="${view==="fechas"}">Por fechas</button></nav></header>`;
 }
 
+// Venta ecomm (Online Store + Cubbo Engage) de clientes nuevos vs recurrentes, sumando una o varias marcas.
+const mixOf=(aggs)=>{let f=0,o=0;for(const x of aggs){f+=x.fresh.tot;o+=(x.ch.ecomm||0)+(x.ch.engage||0)}return{f,r:Math.max(o-f,0),share:o?Math.min(f/o,1):null}};
+const inv=(v)=>v==null?null:1-v;
+// Hoy, ayer y desde el arranque de la promo, para una marca o para todas juntas.
+function mixRows(brands){
+  const b0=brands[0];if(!b0)return [];
+  const today=b0.today,y=b0.close?.date,start=(b0.series||[]).find(r=>r.goal!=null)?.date;
+  const at=(from,to)=>mixOf(brands.map(b=>aggregate(b,from,to)));
+  return [["Hoy",at(today,today)],...(y?[["Ayer",at(y,y)]]:[]),...(start?[["Desde el 8 nov",at(start,today)]]:[])];
+}
+function mixCard(title,rows,extra){
+  if(!rows.length)return "";
+  const [[,m],...rest]=rows;
+  return `<div class="card pace"><div class="lab">Ecomm · nuevos vs recurrentes ${title}</div><div class="big">${P(m.share)}<span class="amt">nuevos</span></div><div class="mix" role="img" aria-label="${P(m.share)} nuevos, ${P(inv(m.share))} recurrentes"><i style="width:${clamp((m.share||0)*100)}%"></i></div><div class="note">Nuevos ${M(m.f)} · Recurrentes ${M(m.r)} (${P(inv(m.share))})</div>${rest.map(([l,x])=>`<div class="note">${l}: ${P(x.share)} nuevos · ${P(inv(x.share))} recurrentes</div>`).join("")}${extra||""}<div class="small">Ecomm = Online Store + Cubbo Engage</div></div>`;
+}
 // Margen grande: % y, al lado, el monto en pesos.
 const cmBig=(pct,value)=>`${P(pct,1)}${value!=null?`<span class="amt">${M(value)}</span>`:""}`;
 // Tarjeta de contribution margin: costos reales, todos los canales, después de Meta Ads (todo el gasto).
@@ -207,6 +225,7 @@ function live(d){
 <div class="card pace"><div class="lab">${d.phase?`Fase ${d.phase.name} (${d.phase.label} nov)`:"Fase"}</div><div class="big">${M(d.phase?.real)}</div><div class="note">de ${M(d.phase?.total)} · Ecomm ${M(d.phase?.ecommReal)} de ${M(d.phase?.ecomm)}</div><div class="bar"><i style="width:${clamp(d.phase?d.phase.real/d.phase.total*100:0)}%"></i></div></div>
 <div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(m.projection)}</div><div class="note">Al ritmo actual · ${P(m.ratio)} del plan</div><div class="scen" aria-label="Escenarios">${scen.map(s=>`<div class="${s===pick?"on":""}">${s}M</div>`).join("")}</div></div>
 ${cmCard(d.cm,"hoy",d.hasTikTok)}
+${mixCard("hoy",mixRows([d]))}
 </section>
 ${cmTable(d.cm?.today?.channels,d.cm?.today?.spend??0,d.hasTikTok,"Margen por canal · hoy")}
 <section class="card" aria-label="Meta Ads" style="gap:20px">
@@ -266,7 +285,7 @@ ${d.cm?top("Contribution margin ayer",cmBig(d.cm.yesterday?.pct,d.cm.yesterday?.
 <section class="card"><h2>Venta de ayer por canal</h2><div class="scroll"><table style="min-width:560px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo del día</th><th class="r">% del objetivo</th><th class="r">% de la venta</th></tr></thead><tbody>${chan}</tbody></table></div></section>
 <section class="card"><div class="spread"><h2>Meta Ads día por día · gasto, NC-ROAS y margen</h2><div class="small">Objetivo 20%: ${X(d.limits.obj)} · gasto acumulado ${M(d.meta.cumulative.spend)} de ${M(d.meta.cumulative.plan15)}</div></div><div class="scroll"><table style="min-width:820px;font-size:14px"><thead><tr><th>Día</th><th class="r">Plan</th><th class="r">Para escalar</th><th class="r">Gasto real</th><th class="r">2025</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Margen</th><th style="padding-left:16px">Regla</th></tr></thead><tbody>${metaRows}</tbody></table></div></section>
 <section class="grid3">
-<div class="card"><h2 style="font-size:18px">Ecomm ayer</h2>${[["Órdenes",c.orders.toLocaleString("en-US")],["AOV · base "+M(d.ticket.base),M(c.aov)],["Piezas por orden",c.pieces?c.pieces.toFixed(2):"—"],["Órdenes con 3+ piezas",P(c.kit.share)],["Clientes nuevos (% venta)",P(c.freshShare)],["NC-ROAS",`<span class="${ncClass(m?.nc,d.limits)}">${X(m?.nc)}</span>`],["MER",P(merPct(m?.mer),1)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
+<div class="card"><h2 style="font-size:18px">Ecomm ayer</h2>${[["Órdenes",c.orders.toLocaleString("en-US")],["AOV · base "+M(d.ticket.base),M(c.aov)],["Piezas por orden",c.pieces?c.pieces.toFixed(2):"—"],["Órdenes con 3+ piezas",P(c.kit.share)],["Clientes nuevos (% venta)",P(c.freshShare)],["Recurrentes (% venta)",P(inv(c.freshShare))],["NC-ROAS",`<span class="${ncClass(m?.nc,d.limits)}">${X(m?.nc)}</span>`],["MER",P(merPct(m?.mer),1)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
 <div class="card"><h2 style="font-size:18px">Base propia ayer</h2>${[["Klaviyo total",M(ky?.total)],["Campañas",M(ky?.campaigns)],["Flows",M(ky?.flows)],["Cubbo Engage",M(d.engage.yesterday.revenue)],["Órdenes Cubbo Engage",d.engage.yesterday.orders],...[...(d.klaviyo?.flows||[])].filter(f=>f.yesterday).sort((a,b)=>b.yesterday-a.yesterday).slice(0,3).map(f=>["Flow · "+esc(f.name),M(f.yesterday)])].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
 <div class="card"><h2 style="font-size:18px">Plan de hoy · ${dayLabel(d.today)}</h2>${[["Objetivo de venta",M(t?.total)],...(d.channelList||[]).map(x=>[x.label,M(t?.[x.key])]),["Presupuesto Meta Ads",M(t?.meta15)],["Nivel para escalar",M(t?.meta20)]].map(([a,b])=>`<div class="line"><span>${a}</span><strong>${b}</strong></div>`).join("")}</div>
 </section>
@@ -294,6 +313,7 @@ function generalView(g){
 <div class="card pace"><div class="lab">Hoy vs objetivo del día</div><div class="big">${M(g.day.real)}</div><div class="note">Objetivo del día ${M(g.day.goal)} · a esta hora ${M(g.day.expected)}</div><div class="note">Cierre proyectado <strong>${M(g.day.projection)}</strong>${g.day.projection!=null&&g.day.goal?" · "+P(g.day.projection/g.day.goal)+" del objetivo":""}</div>${dayBar(g.day.real,g.day.goal,g.day.expected,dayPace)}<div class="row"><span class="pill ${paceClass(dayPace)}">${P(dayPace)} del pacing</span></div>${split(b=>`${M(b.day.real)} de ${M(b.day.goal)}`)}</div>
 <div class="card pace"><div class="lab">Proyección de cierre de mes</div><div class="big">${M(g.month.projection)}</div><div class="note">Objetivo ${M(g.goal)} · ${g.month.projection>=g.goal?"+":"−"}${M(Math.abs(g.month.projection-g.goal))}</div><div class="note">Ayer cerró en ${M(g.yesterday.real)} de ${M(g.yesterday.goal)}</div>${split(b=>M(b.month.projection))}</div>
 <div class="card pace"><div class="lab">Contribution margin hoy · todas las marcas</div><div class="big">${cmBig(g.cm.today?.pct,g.cm.today?.value)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div>${cmSplit("today")}<div class="note">Ayer ${P(g.cm.yesterday?.pct,1)} · ${M(g.cm.yesterday?.value)}</div>${cmSplit("yesterday")}<div class="note">Acumulado promo ${P(g.cm.promo?.pct,1)} · ${M(g.cm.promo?.value)}</div>${cmSplit("promo")}<div class="small">${costNote(g.brands.some(b=>b.hasTikTok))}</div></div>
+${(()=>{const bs=data.order.map(id=>data.brands[id]).filter(b=>!b.error&&b.series);return mixCard("hoy · todas las marcas",mixRows(bs),`<div class="small split">${bs.map(b=>`${esc(b.name)} <strong>${P(mixOf([aggregate(b,b.today,b.today)]).share)}</strong>`).join(" · ")}</div>`)})()}
 </section>
 <section class="card" aria-label="Por marca"><h2>Por marca</h2><div class="scroll"><table style="min-width:980px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Hoy</th><th class="r">Objetivo hoy</th><th class="r">Pacing</th><th class="r">Proyección día</th><th class="r">Noviembre</th><th class="r">Objetivo mes</th><th class="r">Proyección mes</th><th class="r">CM hoy</th><th class="r">CM %</th><th class="r">Meta Ads hoy</th></tr></thead><tbody>${brandRows}${totalRow}</tbody></table></div><div class="small">Contribution margin con costos reales (COGS, IVA, pasarela 3%, Cubbo y comisión de TikTok), todos los canales, después de todo el gasto de Meta Ads. % sobre la venta sin IVA. Todavía sin el gasto de GMV Max.${g.brands.some(b=>!b.cm)?` El total no incluye a ${esc(g.brands.filter(b=>!b.cm).map(b=>b.name).join(", "))} hasta tener sus costos.`:""}</div></section>
 <section class="grid2" aria-label="Venta por canal">${channelCards}</section>`;
@@ -370,6 +390,7 @@ ${rangeControls()}
 <div class="card pace"><div class="lab">NC-ROAS</div><div class="big ${ncClass(s.nc,l)}">${X(s.nc)}</div><div class="note">Objetivo ${X(l.obj)} · piso ${X(l.piso)}</div><div class="small">Venta sin IVA de clientes nuevos (ecomm + Cubbo Engage) ${M(s.fresh.tot-s.fresh.tax)} ÷ gasto en clientes nuevos ${M(s.spendNew)} · CAC ${M(s.cac)} · margen nuevos ${P(s.newMargin,1)}</div></div>
 <div class="card pace"><div class="lab">MER</div><div class="big">${P(s.mer,1)}</div><div class="note">Gasto Meta Ads ${M(s.spend)} ÷ venta ecomm ${M(s.ch.ecomm)}</div><div class="small">De ese gasto, ${M(s.spend-s.spendNew)} fue a clientes existentes</div></div>
 <div class="card pace"><div class="lab">Ecomm</div><div class="big">${(s.ordersEcomm||0).toLocaleString("en-US")}</div><div class="note">órdenes · AOV ${M(s.aov)} · ${s.ordersEcomm?(s.pieces/s.ordersEcomm).toFixed(2):"—"} piezas por orden</div><div class="small">Clientes nuevos: ${P(s.freshShare)} de la venta online (ecomm + Cubbo Engage)</div></div>
+${mixCard("en el rango",[["",mixOf([s])]])}
 </section>
 ${c.missing?"":cmTable(c.ch,s.spend,d.hasTikTok,"Margen por canal")}
 <section class="card"><h2>Venta por canal</h2><div class="scroll"><table style="min-width:520px;font-size:14px"><thead><tr><th>Canal</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th><th class="r">% de la venta</th></tr></thead><tbody>${chanRows}</tbody></table></div></section>
@@ -390,6 +411,7 @@ ${rangeControls()}
 <div class="card pace dark"><div class="lab">Venta total vs objetivo</div><div class="big">${M(T.total)}</div><div class="note">Objetivo ${M(T.goal)} · ${P(pace)} del objetivo</div>${goalBar(T.totalG,T.goal)}${split((b,s)=>`${M(s.total)} de ${M(s.goal)}`)}</div>
 <div class="card pace"><div class="lab">Contribution margin · todas las marcas</div><div class="big">${cmBig(cmPct,T.cm)}</div><div class="note">% de la venta sin IVA, después de Meta Ads</div>${split((b,s)=>`${P(s.cmPct,1)} · ${M(s.cmValue)}`)}<div class="small">${costNote(list.some(({b})=>b.hasTikTok))}</div></div>
 <div class="card pace"><div class="lab">Gasto Meta Ads</div><div class="big">${M(T.spend)}</div><div class="note">En clientes nuevos ${M(T.spendNew)} · MER ${P(T.ecomm?T.spend/T.ecomm:null,1)}</div>${split((b,s)=>`${M(s.spend)} · NC-ROAS ${X(s.nc)}`)}</div>
+${mixCard("· todas las marcas",[["",mixOf(list.map(x=>x.s))]],split((b,s)=>P(mixOf([s]).share)+" nuevos"))}
 </section>
 <section class="card"><h2>Por marca</h2><div class="scroll"><table style="min-width:860px;font-size:14px"><thead><tr><th>Marca</th><th class="r">Venta</th><th class="r">Objetivo</th><th class="r">% del objetivo</th><th class="r">CM %</th><th class="r">CM $</th><th class="r">NC-ROAS</th><th class="r">MER</th><th class="r">Gasto Meta Ads</th></tr></thead><tbody>${rows}</tbody></table></div><div class="small">NC-ROAS: venta sin IVA de clientes nuevos ÷ gasto en clientes nuevos. MER: gasto ÷ venta ecomm. El objetivo de hoy cuenta solo hasta la hora actual; antes del 8 nov no hay objetivo diario.</div></section>
 <section class="grid2">${chan}</section>`;
